@@ -21,6 +21,7 @@ type Activity = {
   subtitle: string;
   reward: number;
   conversionTime: number | null;
+  trackingLink: string | null;
 };
 
 const filters: Filter[] = [
@@ -107,6 +108,7 @@ export default function Home() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offerError, setOfferError] = useState<string | null>(null);
+  const [launchingOffer, setLaunchingOffer] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +155,10 @@ export default function Home() {
                   offer.conversion_time == null
                     ? null
                     : Number(offer.conversion_time) / 60,
+                trackingLink:
+                  typeof offer.tracking_link === "string"
+                    ? offer.tracking_link
+                    : null,
               }),
             )
           : [];
@@ -449,10 +455,22 @@ export default function Home() {
 
                       <button
                         type="button"
-                        disabled
-                        className="cursor-not-allowed rounded-xl bg-white/15 px-6 py-3 text-xs font-black text-white/50"
+                        disabled={!item.trackingLink || launchingOffer === item.id}
+                        onClick={() => {
+                          if (!item.trackingLink) return;
+
+                          setLaunchingOffer(item.id);
+                          window.location.assign(
+                            `/api/ayet/launch?offerId=${encodeURIComponent(item.id)}`,
+                          );
+                        }}
+                        className={`rounded-xl px-6 py-3 text-xs font-black ${
+                          item.trackingLink
+                            ? `${style.button} shadow-lg`
+                            : "cursor-not-allowed bg-white/15 text-white/50"
+                        }`}
                       >
-                        INIZIA
+                        {launchingOffer === item.id ? "APERTURA…" : "INIZIA"}
                       </button>
                     </div>
                   </div>
