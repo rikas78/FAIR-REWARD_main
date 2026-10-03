@@ -31,19 +31,23 @@ async function getDevelopmentIp() {
   return data.ip;
 }
 
-function resolveExternalIdentifier() {
-  if (process.env.NODE_ENV !== "production") {
-    return "fairreward-dev-user-001";
+function resolveExternalIdentifier(request: NextRequest) {
+  const existing = request.cookies.get("fr_ext_id")?.value;
+
+  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
+    return { externalIdentifier: existing, setCookie: false };
   }
 
-  throw new Error(
-    "Production user identity is not connected yet. Wire this route to FairReward Auth before enabling production inventory.",
-  );
+  return {
+    externalIdentifier: `fr_${crypto.randomUUID()}`,
+    setCookie: true,
+  };
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const externalIdentifier = resolveExternalIdentifier();
+    const identity = resolveExternalIdentifier(request);
+    const externalIdentifier = identity.externalIdentifier;
 
     let ip = getClientIp(request);
 
@@ -99,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     const payload = JSON.parse(body);
 
-    return NextResponse.json(
+    const result = NextResponse.json(
       {
         provider: "ayeT",
         adslot: AYeT_ADSLOT_ID,
@@ -112,6 +116,18 @@ export async function GET(request: NextRequest) {
         },
       },
     );
+
+    if (identity.setCookie) {
+      result.cookies.set("fr_ext_id", externalIdentifier, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    return result;
   } catch (error) {
     return NextResponse.json(
       {

@@ -31,14 +31,17 @@ async function getDevelopmentIp() {
   return data.ip;
 }
 
-function resolveExternalIdentifier() {
-  if (process.env.NODE_ENV !== "production") {
-    return "fairreward-dev-user-001";
+function resolveExternalIdentifier(request: NextRequest) {
+  const existing = request.cookies.get("fr_ext_id")?.value;
+
+  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
+    return { externalIdentifier: existing, setCookie: false };
   }
 
-  throw new Error(
-    "Production user identity is not connected yet. Wire this route to FairReward Auth before enabling production launches.",
-  );
+  return {
+    externalIdentifier: `fr_${crypto.randomUUID()}`,
+    setCookie: true,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -52,7 +55,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const externalIdentifier = resolveExternalIdentifier();
+    const identity = resolveExternalIdentifier(request);
+    const externalIdentifier = identity.externalIdentifier;
 
     let ip = getClientIp(request);
 
@@ -150,9 +154,21 @@ export async function GET(request: NextRequest) {
     const clickId = `frdev_${crypto.randomUUID()}`;
     trackingUrl.searchParams.set("custom_1", clickId);
 
-    return NextResponse.redirect(trackingUrl.toString(), {
+    const result = NextResponse.redirect(trackingUrl.toString(), {
       status: 307,
     });
+
+    if (identity.setCookie) {
+      result.cookies.set("fr_ext_id", externalIdentifier, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    return result;
   } catch (error) {
     return NextResponse.json(
       {
