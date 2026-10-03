@@ -145,13 +145,14 @@ export default function Home() {
                 subtitle: String(
                   offer.description ?? "Attività disponibile",
                 ),
-                reward: Number(
-                  offer.currency_amount ?? offer.payout ?? 0,
-                ),
+                reward:
+                  Number(offer.currency_amount ?? 0) > 0
+                    ? Number(offer.currency_amount)
+                    : Number(offer.payout ?? 0),
                 conversionTime:
                   offer.conversion_time == null
                     ? null
-                    : Number(offer.conversion_time),
+                    : Number(offer.conversion_time) / 60,
               }),
             )
           : [];
