@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Filter =
   | "Tutte"
@@ -122,11 +122,106 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("Tutte");
   const [time, setTime] = useState("10");
   const [goal, setGoal] = useState("5");
+  const [activities, setActivities] = useState<
+    Array<{
+      id: string;
+      category: Filter;
+      color: keyof typeof styles;
+      title: string;
+      subtitle: string;
+      reward: number;
+      time: number | null;
+    }>
+  >([]);
+  const [loadingOffers, setLoadingOffers] = useState(true);
+  const [offerError, setOfferError] = useState<string | null>(null);
 
-  const visible =
-    filter === "Tutte"
-      ? activities
-      : activities.filter((item) => item.category === filter);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOffers() {
+      try {
+        setLoadingOffers(true);
+        setOfferError(null);
+
+        const response = await fetch("/api/ayet/offers", {
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Errore ayeT");
+        }
+
+        const colors: Array<keyof typeof styles> = [
+          "pink",
+          "cyan",
+          "yellow",
+          "green",
+          "purple",
+          "orange",
+        ];
+
+        const mapped = (data?.offers ?? []).map(
+          (offer: Record<string, unknown>, index: number) => {
+            const raw = String(
+              offer.category ?? offer.type ?? "",
+            ).toLowerCase();
+
+            let category: Filter = "Micro-task";
+
+            if (raw.includes("survey")) category = "Sondaggi";
+            else if (raw.includes("app")) category = "App";
+            else if (raw.includes("video")) category = "Video";
+            else if (raw.includes("shop")) category = "Shopping";
+            else if (raw.includes("game")) category = "Giochi";
+
+            return {
+              id: String(offer.id ?? offer.offer_id ?? index),
+              category,
+              color: colors[index % colors.length],
+              title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
+              subtitle: String(
+                offer.description ?? "Attività disponibile",
+              ),
+              reward: Number(
+                offer.currency_amount ?? offer.payout ?? 0,
+              ),
+              time:
+                offer.conversion_time == null
+                  ? null
+                  : Number(offer.conversion_time),
+            };
+          },
+        );
+
+        if (!cancelled) setActivities(mapped);
+      } catch (error) {
+        if (!cancelled) {
+          setOfferError(
+            error instanceof Error
+              ? error.message
+              : "Errore caricamento offerte",
+          );
+          setActivities([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingOffers(false);
+      }
+    }
+
+    loadOffers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visible = useMemo(() => {
+    if (filter === "Tutte") return activities;
+    return activities.filter((item) => item.category === filter);
+  }, [activities, filter]);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#020a1d] text-white">
@@ -318,13 +413,47 @@ export default function Home() {
           </button>
         </div>
 
+        {loadingOffers && (
+          <div className="rounded-3xl border border-cyan-400/20 bg-[#06132b] p-8 text-center">
+            <div className="text-sm font-black">
+              Caricamento offerte ayeT…
+            </div>
+            <div className="mt-2 text-xs text-white/45">
+              Stiamo leggendo l’inventory reale.
+            </div>
+          </div>
+        )}
+
+        {!loadingOffers && offerError && (
+          <div className="rounded-3xl border border-orange-400/30 bg-[#06132b] p-8">
+            <div className="text-sm font-black text-orange-300">
+              ayeT non ha restituito l’inventory
+            </div>
+            <div className="mt-2 text-xs leading-5 text-white/45">
+              {offerError}
+            </div>
+          </div>
+        )}
+
+        {!loadingOffers && !offerError && visible.length == 0 && (
+          <div className="rounded-3xl border border-white/10 bg-[#06132b] p-8 text-center">
+            <div className="text-sm font-black">
+              Nessuna offerta disponibile in questo momento.
+            </div>
+            <div className="mt-2 text-xs text-white/45">
+              La connessione ayeT è attiva, ma l’inventory restituita
+              per questo utente/device è vuota.
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           {visible.map((item) => {
             const style = styles[item.color];
 
             return (
               <article
-                key={item.title}
+                key={item.id}
                 className={`relative min-h-[210px] overflow-hidden rounded-3xl border ${style.border} bg-[#06132b]`}
               >
                 <div
@@ -332,13 +461,46 @@ export default function Home() {
                 />
 
                 <div className="relative flex min-h-[210px] flex-col justify-between p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div
-                        className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
-                      >
-                        {item.category.toUpperCase()}
-                      </div>
+                  <div>
+                    <div
+                      className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
+                    >
+                      {item.category.toUpperCase()}
+                    </div>
+
+                    <div className="mt-4 text-sm text-white/45">
+                      {item.time != null
+                        ? `Conversione stimata: ${item.time} min`
+                        : "Tempi variabili"}
+                    </div>
+
+                    <h3 className="mt-2 text-xl font-black">
+                      {item.title}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-white/55">
+                      {item.subtitle}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 flex items-end justify-between gap-4">
+                    <div className={`text-3xl font-black ${style.reward}`}>
+                      € {item.reward.toFixed(2)}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled
+                      className="cursor-not-allowed rounded-xl bg-white/15 px-6 py-3 text-xs font-black text-white/50"
+                    >
+                      INIZIA
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
 
                       <div className="mt-4 text-sm text-white/45">
                         {item.time}
