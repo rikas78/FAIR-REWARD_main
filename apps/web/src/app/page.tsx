@@ -11,6 +11,18 @@ type Filter =
   | "Micro-task"
   | "Giochi";
 
+type Color = "pink" | "cyan" | "yellow" | "green" | "purple" | "orange";
+
+type Activity = {
+  id: string;
+  category: Filter;
+  color: Color;
+  title: string;
+  subtitle: string;
+  reward: number;
+  conversionTime: number | null;
+};
+
 const filters: Filter[] = [
   "Tutte",
   "Sondaggi",
@@ -21,58 +33,16 @@ const filters: Filter[] = [
   "Giochi",
 ];
 
-const activities = [
+const styles: Record<
+  Color,
   {
-    category: "Sondaggi",
-    color: "pink",
-    title: "Survey Lifestyle",
-    subtitle: "Rispondi a 8 domande",
-    reward: "€ 2,50",
-    time: "3 min",
-  },
-  {
-    category: "App",
-    color: "cyan",
-    title: "Installa e prova",
-    subtitle: "Nuova app partner",
-    reward: "€ 4,00",
-    time: "5 min",
-  },
-  {
-    category: "Video",
-    color: "yellow",
-    title: "Guarda un video",
-    subtitle: "Scopri nuovi contenuti",
-    reward: "€ 1,20",
-    time: "2 min",
-  },
-  {
-    category: "Shopping",
-    color: "green",
-    title: "Offerta speciale",
-    subtitle: "Acquista e guadagna",
-    reward: "€ 8,00",
-    time: "4 min",
-  },
-  {
-    category: "Giochi",
-    color: "purple",
-    title: "Completa il livello",
-    subtitle: "Raggiungi l'obiettivo",
-    reward: "€ 5,00",
-    time: "6 min",
-  },
-  {
-    category: "Micro-task",
-    color: "orange",
-    title: "Mini-task rapido",
-    subtitle: "Azioni semplici",
-    reward: "€ 0,80",
-    time: "1 min",
-  },
-] as const;
-
-const styles = {
+    border: string;
+    badge: string;
+    button: string;
+    reward: string;
+    glow: string;
+  }
+> = {
   pink: {
     border: "border-fuchsia-500/60",
     badge: "bg-fuchsia-500 text-white",
@@ -104,7 +74,7 @@ const styles = {
   purple: {
     border: "border-violet-500/60",
     badge: "bg-violet-500 text-white",
-    button: "bg-violet-500 text-white hover:bg-violet-400",
+    button: "bg-violet-500 hover:bg-violet-400",
     reward: "text-violet-300",
     glow: "from-violet-500/25",
   },
@@ -115,24 +85,26 @@ const styles = {
     reward: "text-orange-300",
     glow: "from-orange-400/25",
   },
-} as const;
+};
+
+function detectCategory(offer: Record<string, unknown>): Filter {
+  const raw = `${offer.category ?? ""} ${offer.type ?? ""} ${offer.name ?? ""}`
+    .toLowerCase();
+
+  if (raw.includes("survey")) return "Sondaggi";
+  if (raw.includes("app")) return "App";
+  if (raw.includes("video")) return "Video";
+  if (raw.includes("shop")) return "Shopping";
+  if (raw.includes("game")) return "Giochi";
+  return "Micro-task";
+}
 
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("Tutte");
   const [time, setTime] = useState("10");
   const [goal, setGoal] = useState("5");
-  const [activities, setActivities] = useState<
-    Array<{
-      id: string;
-      category: Filter;
-      color: keyof typeof styles;
-      title: string;
-      subtitle: string;
-      reward: number;
-      time: number | null;
-    }>
-  >([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offerError, setOfferError] = useState<string | null>(null);
 
@@ -151,10 +123,10 @@ export default function Home() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data?.error ?? "Errore ayeT");
+          throw new Error(data?.error ?? "Errore durante il caricamento ayeT");
         }
 
-        const colors: Array<keyof typeof styles> = [
+        const colors: Color[] = [
           "pink",
           "cyan",
           "yellow",
@@ -163,51 +135,43 @@ export default function Home() {
           "orange",
         ];
 
-        const mapped = (data?.offers ?? []).map(
-          (offer: Record<string, unknown>, index: number) => {
-            const raw = String(
-              offer.category ?? offer.type ?? "",
-            ).toLowerCase();
+        const mapped: Activity[] = Array.isArray(data?.offers)
+          ? data.offers.map(
+              (offer: Record<string, unknown>, index: number) => ({
+                id: String(offer.id ?? offer.offer_id ?? index),
+                category: detectCategory(offer),
+                color: colors[index % colors.length],
+                title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
+                subtitle: String(
+                  offer.description ?? "Attività disponibile",
+                ),
+                reward: Number(
+                  offer.currency_amount ?? offer.payout ?? 0,
+                ),
+                conversionTime:
+                  offer.conversion_time == null
+                    ? null
+                    : Number(offer.conversion_time),
+              }),
+            )
+          : [];
 
-            let category: Filter = "Micro-task";
-
-            if (raw.includes("survey")) category = "Sondaggi";
-            else if (raw.includes("app")) category = "App";
-            else if (raw.includes("video")) category = "Video";
-            else if (raw.includes("shop")) category = "Shopping";
-            else if (raw.includes("game")) category = "Giochi";
-
-            return {
-              id: String(offer.id ?? offer.offer_id ?? index),
-              category,
-              color: colors[index % colors.length],
-              title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
-              subtitle: String(
-                offer.description ?? "Attività disponibile",
-              ),
-              reward: Number(
-                offer.currency_amount ?? offer.payout ?? 0,
-              ),
-              time:
-                offer.conversion_time == null
-                  ? null
-                  : Number(offer.conversion_time),
-            };
-          },
-        );
-
-        if (!cancelled) setActivities(mapped);
+        if (!cancelled) {
+          setActivities(mapped);
+        }
       } catch (error) {
         if (!cancelled) {
           setOfferError(
             error instanceof Error
               ? error.message
-              : "Errore caricamento offerte",
+              : "Errore durante il caricamento delle offerte",
           );
           setActivities([]);
         }
       } finally {
-        if (!cancelled) setLoadingOffers(false);
+        if (!cancelled) {
+          setLoadingOffers(false);
+        }
       }
     }
 
@@ -220,18 +184,17 @@ export default function Home() {
 
   const visible = useMemo(() => {
     if (filter === "Tutte") return activities;
-    return activities.filter((item) => item.category === filter);
+    return activities.filter((activity) => activity.category === filter);
   }, [activities, filter]);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#020a1d] text-white">
-      {/* TOP MENU */}
       <header className="sticky top-0 z-50 border-b border-cyan-400/10 bg-[#020a1d]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[70px] max-w-7xl items-center justify-between px-4">
           <button
             onClick={() => setMenuOpen((value) => !value)}
-            aria-label="Menu"
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-400/20 bg-white/[0.04] text-xl"
+            aria-label="Menu"
           >
             ☰
           </button>
@@ -250,7 +213,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* SECOND MENU — SEMPRE DENTRO LA PAGINA */}
         <div className="border-t border-cyan-400/10 bg-[#031029]">
           <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 py-2">
             {["Home", "Attività", "Play", "Planner", "Wallet"].map(
@@ -259,7 +221,7 @@ export default function Home() {
                   key={item}
                   className={`shrink-0 rounded-xl border px-5 py-2.5 text-sm font-bold ${
                     index === 0
-                      ? "border-fuchsia-400 bg-fuchsia-500 text-white"
+                      ? "border-fuchsia-400 bg-fuchsia-500"
                       : "border-cyan-400/15 bg-white/[0.025] text-white/75"
                   }`}
                 >
@@ -271,7 +233,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* MENU APERTO: OVERLAY NELLA PAGINA, NON SIDEBAR */}
       {menuOpen && (
         <div
           className="fixed inset-0 z-[60] bg-black/70"
@@ -286,8 +247,8 @@ export default function Home() {
                 (item) => (
                   <button
                     key={item}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm font-bold text-white/80"
                     onClick={() => setMenuOpen(false)}
+                    className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm font-bold text-white/80"
                   >
                     {item}
                   </button>
@@ -298,7 +259,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* HERO */}
       <section className="mx-auto max-w-7xl px-4 pb-5 pt-5">
         <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-fuchsia-500/30 bg-[#07132b]">
           <img
@@ -309,26 +269,25 @@ export default function Home() {
 
           <div className="absolute inset-0 bg-gradient-to-r from-[#020a1d] via-[#020a1d]/55 to-[#020a1d]/10" />
 
-          <div className="relative z-10 flex min-h-[320px] max-w-xl flex-col justify-center px-6 py-9 sm:px-10">
+          <div className="relative z-10 flex min-h-[320px] max-w-xl flex-col justify-center px-6 py-9">
             <div className="text-4xl font-black leading-[0.92] sm:text-6xl">
               IL TUO TEMPO
               <br />
               <span className="text-fuchsia-500">HA VALORE</span>
             </div>
 
-            <p className="mt-5 max-w-md text-sm leading-6 text-white/80 sm:text-base">
+            <p className="mt-5 max-w-md text-sm leading-6 text-white/80">
               Attività retribuite quando vuoi tu. Vedi prima il tempo stimato e
               la ricompensa prevista.
             </p>
 
-            <button className="mt-6 w-fit rounded-2xl bg-gradient-to-r from-fuchsia-500 via-pink-500 to-yellow-400 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-fuchsia-500/20">
+            <button className="mt-6 w-fit rounded-2xl bg-gradient-to-r from-fuchsia-500 via-pink-500 to-yellow-400 px-6 py-3.5 text-sm font-black shadow-lg shadow-fuchsia-500/20">
               Scopri le attività →
             </button>
           </div>
         </div>
       </section>
 
-      {/* TEMPO / OBIETTIVO */}
       <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-5 lg:grid-cols-2">
         <div className="rounded-3xl border border-cyan-400/20 bg-[#06132b] p-4">
           <div className="mb-3 flex items-center gap-3">
@@ -377,7 +336,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SECONDO MENU — FILTRI */}
       <section className="mx-auto max-w-7xl px-4 pb-6">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {filters.map((item) => (
@@ -396,7 +354,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ATTIVITÀ */}
       <section className="mx-auto max-w-7xl px-4 pb-28">
         <div className="mb-5 flex items-end justify-between">
           <div>
@@ -408,9 +365,9 @@ export default function Home() {
             </h2>
           </div>
 
-          <button className="text-sm font-bold text-white/65">
-            Vedi tutte →
-          </button>
+          <span className="text-xs text-white/40">
+            {loadingOffers ? "…" : `${visible.length} offerte`}
+          </span>
         </div>
 
         {loadingOffers && (
@@ -419,7 +376,7 @@ export default function Home() {
               Caricamento offerte ayeT…
             </div>
             <div className="mt-2 text-xs text-white/45">
-              Stiamo leggendo l’inventory reale.
+              Stiamo leggendo l'inventory reale.
             </div>
           </div>
         )}
@@ -427,7 +384,7 @@ export default function Home() {
         {!loadingOffers && offerError && (
           <div className="rounded-3xl border border-orange-400/30 bg-[#06132b] p-8">
             <div className="text-sm font-black text-orange-300">
-              ayeT non ha restituito l’inventory
+              Errore collegamento ayeT
             </div>
             <div className="mt-2 text-xs leading-5 text-white/45">
               {offerError}
@@ -435,75 +392,44 @@ export default function Home() {
           </div>
         )}
 
-        {!loadingOffers && !offerError && visible.length == 0 && (
+        {!loadingOffers && !offerError && visible.length === 0 && (
           <div className="rounded-3xl border border-white/10 bg-[#06132b] p-8 text-center">
             <div className="text-sm font-black">
               Nessuna offerta disponibile in questo momento.
             </div>
             <div className="mt-2 text-xs text-white/45">
-              La connessione ayeT è attiva, ma l’inventory restituita
-              per questo utente/device è vuota.
+              Il collegamento ayeT risponde correttamente, ma l'inventory per
+              questo contesto è vuota.
             </div>
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {visible.map((item) => {
-            const style = styles[item.color];
+        {!loadingOffers && !offerError && visible.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {visible.map((item) => {
+              const style = styles[item.color];
 
-            return (
-              <article
-                key={item.id}
-                className={`relative min-h-[210px] overflow-hidden rounded-3xl border ${style.border} bg-[#06132b]`}
-              >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${style.glow} via-transparent to-transparent opacity-70`}
-                />
+              return (
+                <article
+                  key={item.id}
+                  className={`relative min-h-[210px] overflow-hidden rounded-3xl border ${style.border} bg-[#06132b]`}
+                >
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${style.glow} via-transparent to-transparent opacity-70`}
+                  />
 
-                <div className="relative flex min-h-[210px] flex-col justify-between p-5">
-                  <div>
-                    <div
-                      className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
-                    >
-                      {item.category.toUpperCase()}
-                    </div>
-
-                    <div className="mt-4 text-sm text-white/45">
-                      {item.time != null
-                        ? `Conversione stimata: ${item.time} min`
-                        : "Tempi variabili"}
-                    </div>
-
-                    <h3 className="mt-2 text-xl font-black">
-                      {item.title}
-                    </h3>
-
-                    <p className="mt-1 text-sm text-white/55">
-                      {item.subtitle}
-                    </p>
-                  </div>
-
-                  <div className="mt-5 flex items-end justify-between gap-4">
-                    <div className={`text-3xl font-black ${style.reward}`}>
-                      € {item.reward.toFixed(2)}
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled
-                      className="cursor-not-allowed rounded-xl bg-white/15 px-6 py-3 text-xs font-black text-white/50"
-                    >
-                      INIZIA
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                  <div className="relative flex min-h-[210px] flex-col justify-between p-5">
+                    <div>
+                      <div
+                        className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
+                      >
+                        {item.category.toUpperCase()}
+                      </div>
 
                       <div className="mt-4 text-sm text-white/45">
-                        {item.time}
+                        {item.conversionTime != null
+                          ? `Tempo stimato: ${item.conversionTime} min`
+                          : "Tempo variabile"}
                       </div>
 
                       <h3 className="mt-2 text-xl font-black">
@@ -514,27 +440,28 @@ export default function Home() {
                         {item.subtitle}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="mt-5 flex items-end justify-between gap-4">
-                    <div className={`text-3xl font-black ${style.reward}`}>
-                      {item.reward}
+                    <div className="mt-5 flex items-end justify-between gap-4">
+                      <div className={`text-3xl font-black ${style.reward}`}>
+                        € {item.reward.toFixed(2)}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-xl bg-white/15 px-6 py-3 text-xs font-black text-white/50"
+                      >
+                        INIZIA
+                      </button>
                     </div>
-
-                    <button
-                      className={`rounded-xl px-6 py-3 text-xs font-black transition ${style.button}`}
-                    >
-                      INIZIA
-                    </button>
                   </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
-      {/* MOBILE BOTTOM NAV */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-cyan-400/15 bg-[#020a1d]/95 backdrop-blur-xl">
         <div className="mx-auto grid max-w-7xl grid-cols-4">
           {[
