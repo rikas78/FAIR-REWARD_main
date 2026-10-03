@@ -19,8 +19,19 @@ type Activity = {
   color: Color;
   title: string;
   subtitle: string;
-  reward: number;
+  description: string;
+  reward: number | null;
+  providerPayout: number | null;
   conversionTime: number | null;
+  maxConversionTime: number | null;
+  conversionType: string;
+  paymentRequired: boolean;
+  requireReservation: boolean;
+  platforms: string[];
+  devices: string[];
+  instructions: string;
+  landingPage: string | null;
+  supportUrl: string | null;
   trackingLink: string | null;
 };
 
@@ -89,15 +100,53 @@ const styles: Record<
 };
 
 function detectCategory(offer: Record<string, unknown>): Filter {
-  const raw = `${offer.category ?? ""} ${offer.type ?? ""} ${offer.name ?? ""}`
+  const tags = offer.tags as
+    | { tab?: unknown; tasks?: unknown[]; categories?: unknown[] }
+    | undefined;
+
+  const raw = `${offer.category ?? ""} ${offer.type ?? ""} ${offer.name ?? ""} ${
+    tags?.tab ?? ""
+  } ${(tags?.tasks ?? []).join(" ")} ${(tags?.categories ?? []).join(" ")}`
     .toLowerCase();
 
-  if (raw.includes("survey")) return "Sondaggi";
+  if (raw.includes("game") || raw.includes("giochi")) return "Giochi";
+  if (raw.includes("survey") || raw.includes("surveys")) return "Sondaggi";
   if (raw.includes("app")) return "App";
   if (raw.includes("video")) return "Video";
   if (raw.includes("shop")) return "Shopping";
-  if (raw.includes("game")) return "Giochi";
   return "Micro-task";
+}
+
+function formatDuration(seconds: number | null) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+
+  const minutes = Math.round(seconds / 60);
+
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h`;
+
+  const days = Math.round(hours / 24);
+  return `${days} gg`;
+}
+
+function cleanText(value: unknown) {
+  return String(value ?? "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&#x65;/gi, "e")
+    .replace(/&amp;/gi, "&")
+    .trim();
+}
+
+function normalizeBoolean(value: unknown) {
+  return value === true || value === 1 || value === "1";
+}
+
+function normalizeArray(value: unknown) {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 export default function Home() {
@@ -109,6 +158,9 @@ export default function Home() {
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offerError, setOfferError] = useState<string | null>(null);
   const [launchingOffer, setLaunchingOffer] = useState<string | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -139,27 +191,68 @@ export default function Home() {
 
         const mapped: Activity[] = Array.isArray(data?.offers)
           ? data.offers.map(
-              (offer: Record<string, unknown>, index: number) => ({
-                id: String(offer.id ?? offer.offer_id ?? index),
-                category: detectCategory(offer),
-                color: colors[index % colors.length],
-                title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
-                subtitle: String(
-                  offer.description ?? "Attività disponibile",
-                ),
-                reward:
-                  Number(offer.currency_amount ?? 0) > 0
-                    ? Number(offer.currency_amount)
-                    : Number(offer.payout ?? 0),
-                conversionTime:
-                  offer.conversion_time == null
-                    ? null
-                    : Number(offer.conversion_time) / 60,
-                trackingLink:
-                  typeof offer.tracking_link === "string"
-                    ? offer.tracking_link
-                    : null,
-              }),
+              (offer: Record<string, unknown>, index: number) => {
+                const rewardValue = Number(offer.currency_amount ?? 0);
+                const providerPayout = Number(offer.payout ?? 0);
+
+                return {
+                  id: String(offer.id ?? offer.offer_id ?? index),
+                  category: detectCategory(offer),
+                  color: colors[index % colors.length],
+                  title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
+                  subtitle: cleanText(
+                    offer.description ?? "Attività disponibile",
+                  ),
+                  description: cleanText(
+                    offer.description ??
+                      offer.introduction ??
+                      "Descrizione non disponibile.",
+                  ),
+                  reward:
+                    Number.isFinite(rewardValue) && rewardValue > 0
+                      ? rewardValue
+                      : null,
+                  providerPayout:
+                    Number.isFinite(providerPayout) && providerPayout > 0
+                      ? providerPayout
+                      : null,
+                  conversionTime:
+                    offer.conversion_time == null
+                      ? null
+                      : Number(offer.conversion_time),
+                  maxConversionTime:
+                    offer.max_conversion_time == null
+                      ? null
+                      : Number(offer.max_conversion_time),
+                  conversionType: String(
+                    offer.conversion_type ?? "conversion",
+                  ),
+                  paymentRequired: normalizeBoolean(offer.payment_required),
+                  requireReservation: normalizeBoolean(
+                    offer.require_reservation,
+                  ),
+                  platforms: normalizeArray(offer.platforms),
+                  devices: normalizeArray(offer.devices),
+                  instructions: cleanText(
+                    offer.conversion_instructions_long ??
+                      offer.conversion_instructions ??
+                      offer.conversion_instructions_short ??
+                      "",
+                  ),
+                  landingPage:
+                    typeof offer.landing_page === "string"
+                      ? offer.landing_page
+                      : null,
+                  supportUrl:
+                    typeof offer.support_url === "string"
+                      ? offer.support_url
+                      : null,
+                  trackingLink:
+                    typeof offer.tracking_link === "string"
+                      ? offer.tracking_link
+                      : null,
+                };
+              },
             )
           : [];
 
@@ -193,6 +286,15 @@ export default function Home() {
     if (filter === "Tutte") return activities;
     return activities.filter((activity) => activity.category === filter);
   }, [activities, filter]);
+
+  function launchActivity(activity: Activity) {
+    if (!activity.trackingLink) return;
+
+    setLaunchingOffer(activity.id);
+    window.location.assign(
+      `/api/ayet/launch?offerId=${encodeURIComponent(activity.id)}`,
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#020a1d] text-white">
@@ -284,11 +386,18 @@ export default function Home() {
             </div>
 
             <p className="mt-5 max-w-md text-sm leading-6 text-white/80">
-              Attività retribuite quando vuoi tu. Vedi prima il tempo stimato e
-              la ricompensa prevista.
+              Attività retribuite quando vuoi tu. Vedi prima le informazioni
+              disponibili e la ricompensa prevista.
             </p>
 
-            <button className="mt-6 w-fit rounded-2xl bg-gradient-to-r from-fuchsia-500 via-pink-500 to-yellow-400 px-6 py-3.5 text-sm font-black shadow-lg shadow-fuchsia-500/20">
+            <button
+              onClick={() =>
+                document
+                  .getElementById("inventory")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="mt-6 w-fit rounded-2xl bg-gradient-to-r from-fuchsia-500 via-pink-500 to-yellow-400 px-6 py-3.5 text-sm font-black shadow-lg shadow-fuchsia-500/20"
+            >
               Scopri le attività →
             </button>
           </div>
@@ -361,7 +470,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-28">
+      <section
+        id="inventory"
+        className="mx-auto max-w-7xl px-4 pb-28"
+      >
         <div className="mb-5 flex items-end justify-between">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300/60">
@@ -383,7 +495,7 @@ export default function Home() {
               Caricamento offerte ayeT…
             </div>
             <div className="mt-2 text-xs text-white/45">
-              Stiamo leggendo l'inventory reale.
+              Stiamo leggendo l&apos;inventory reale.
             </div>
           </div>
         )}
@@ -405,8 +517,8 @@ export default function Home() {
               Nessuna offerta disponibile in questo momento.
             </div>
             <div className="mt-2 text-xs text-white/45">
-              Il collegamento ayeT risponde correttamente, ma l'inventory per
-              questo contesto è vuota.
+              Il collegamento ayeT risponde correttamente, ma l&apos;inventory
+              per questo contesto è vuota.
             </div>
           </div>
         )}
@@ -415,63 +527,97 @@ export default function Home() {
           <div className="grid gap-4 sm:grid-cols-2">
             {visible.map((item) => {
               const style = styles[item.color];
+              const conversionLabel = formatDuration(item.conversionTime);
 
               return (
                 <article
                   key={item.id}
-                  className={`relative min-h-[210px] overflow-hidden rounded-3xl border ${style.border} bg-[#06132b]`}
+                  className={`relative min-h-[250px] overflow-hidden rounded-3xl border ${style.border} bg-[#06132b]`}
                 >
                   <div
                     className={`absolute inset-0 bg-gradient-to-br ${style.glow} via-transparent to-transparent opacity-70`}
                   />
 
-                  <div className="relative flex min-h-[210px] flex-col justify-between p-5">
+                  <div className="relative flex min-h-[250px] flex-col justify-between p-5">
                     <div>
-                      <div
-                        className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
-                      >
-                        {item.category.toUpperCase()}
+                      <div className="flex flex-wrap gap-2">
+                        <div
+                          className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
+                        >
+                          {item.category.toUpperCase()}
+                        </div>
+
+                        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
+                          {item.paymentRequired ? "A PAGAMENTO" : "GRATUITA"}
+                        </div>
                       </div>
 
-                      <div className="mt-4 text-sm text-white/45">
-                        {item.conversionTime != null
-                          ? `Tempo stimato: ${item.conversionTime} min`
-                          : "Tempo variabile"}
-                      </div>
-
-                      <h3 className="mt-2 text-xl font-black">
+                      <h3 className="mt-4 text-xl font-black">
                         {item.title}
                       </h3>
 
-                      <p className="mt-1 text-sm text-white/55">
+                      <p className="mt-1 line-clamp-2 text-sm text-white/55">
                         {item.subtitle}
                       </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.devices.slice(0, 5).map((device) => (
+                          <span
+                            key={device}
+                            className="rounded-lg border border-cyan-400/10 bg-cyan-400/[0.04] px-2 py-1 text-[10px] font-bold text-cyan-100/75"
+                          >
+                            {device}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 text-xs text-white/45">
+                        {conversionLabel
+                          ? `Finestra provider: ${conversionLabel}`
+                          : "Tempistica variabile"}
+                      </div>
                     </div>
 
                     <div className="mt-5 flex items-end justify-between gap-4">
-                      <div className={`text-3xl font-black ${style.reward}`}>
-                        € {item.reward.toFixed(2)}
+                      <div>
+                        <div className={`text-2xl font-black ${style.reward}`}>
+                          {item.reward != null
+                            ? `€ ${item.reward.toFixed(2)}`
+                            : "Reward da configurare"}
+                        </div>
+
+                        {item.reward == null && (
+                          <div className="mt-1 max-w-[220px] text-[10px] leading-4 text-orange-300/75">
+                            Il provider sta inviando il payout, ma la ricompensa
+                            FairReward non è ancora configurata.
+                          </div>
+                        )}
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={!item.trackingLink || launchingOffer === item.id}
-                        onClick={() => {
-                          if (!item.trackingLink) return;
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedActivity(item)}
+                          className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-xs font-black text-white/80"
+                        >
+                          DETTAGLI
+                        </button>
 
-                          setLaunchingOffer(item.id);
-                          window.location.assign(
-                            `/api/ayet/launch?offerId=${encodeURIComponent(item.id)}`,
-                          );
-                        }}
-                        className={`rounded-xl px-6 py-3 text-xs font-black ${
-                          item.trackingLink
-                            ? `${style.button} shadow-lg`
-                            : "cursor-not-allowed bg-white/15 text-white/50"
-                        }`}
-                      >
-                        {launchingOffer === item.id ? "APERTURA…" : "INIZIA"}
-                      </button>
+                        <button
+                          type="button"
+                          disabled={!item.trackingLink || item.reward == null}
+                          onClick={() => launchActivity(item)}
+                          className={`rounded-xl px-5 py-3 text-xs font-black ${
+                            item.trackingLink && item.reward != null
+                              ? `${style.button} shadow-lg`
+                              : "cursor-not-allowed bg-white/15 text-white/40"
+                          }`}
+                        >
+                          {launchingOffer === item.id
+                            ? "APERTURA…"
+                            : "INIZIA"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -480,6 +626,176 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {selectedActivity && (
+        <div
+          className="fixed inset-0 z-[70] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setSelectedActivity(null)}
+        >
+          <div
+            className="mx-auto mt-8 max-w-2xl rounded-[28px] border border-fuchsia-400/25 bg-[#06132b] p-5 shadow-2xl sm:mt-16 sm:p-7"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {(() => {
+              const style = styles[selectedActivity.color];
+              const conversionLabel = formatDuration(
+                selectedActivity.conversionTime,
+              );
+              const maxConversionLabel = formatDuration(
+                selectedActivity.maxConversionTime,
+              );
+
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div
+                        className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
+                      >
+                        {selectedActivity.category.toUpperCase()}
+                      </div>
+                      <h2 className="mt-3 text-2xl font-black sm:text-3xl">
+                        {selectedActivity.title}
+                      </h2>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedActivity(null)}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xl text-white/70"
+                      aria-label="Chiudi"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-sm leading-6 text-white/70">
+                    {selectedActivity.description}
+                  </p>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-fuchsia-400/15 bg-white/[0.03] p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-fuchsia-300/70">
+                        RICOMPENSA
+                      </div>
+                      <div className={`mt-1 text-2xl font-black ${style.reward}`}>
+                        {selectedActivity.reward != null
+                          ? `€ ${selectedActivity.reward.toFixed(2)}`
+                          : "Da configurare"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-cyan-400/15 bg-white/[0.03] p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300/70">
+                        PAGAMENTO
+                      </div>
+                      <div className="mt-1 text-lg font-black">
+                        {selectedActivity.paymentRequired
+                          ? "Richiesto dal partner"
+                          : "Nessun pagamento"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                        DISPONIBILE SU
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedActivity.platforms.length ||
+                        selectedActivity.devices.length ? (
+                          [
+                            ...new Set([
+                              ...selectedActivity.platforms,
+                              ...selectedActivity.devices,
+                            ]),
+                          ].map((item) => (
+                            <span
+                              key={item}
+                              className="rounded-lg border border-cyan-400/10 bg-cyan-400/[0.04] px-2 py-1 text-xs font-bold text-cyan-100/80"
+                            >
+                              {item}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-white/50">
+                            Non specificato
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                        CONVERSIONE
+                      </div>
+                      <div className="mt-2 text-sm font-bold text-white/80">
+                        Tipo: {selectedActivity.conversionType}
+                      </div>
+                      <div className="mt-1 text-sm text-white/55">
+                        {conversionLabel
+                          ? `Indicatore provider: ${conversionLabel}`
+                          : "Tempistica non specificata"}
+                      </div>
+                      {maxConversionLabel && (
+                        <div className="mt-1 text-xs text-white/40">
+                          Finestra massima provider: {maxConversionLabel}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                      COSA DEVI FARE
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-white/70">
+                      {selectedActivity.instructions ||
+                        "Le istruzioni dettagliate saranno fornite dal partner."}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/65">
+                      {selectedActivity.requireReservation
+                        ? "Richiede prenotazione"
+                        : "Nessuna prenotazione indicata"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/65">
+                      Provider: ayeT
+                    </span>
+                  </div>
+
+                  <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      onClick={() => setSelectedActivity(null)}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-xs font-black text-white/70"
+                    >
+                      CHIUDI
+                    </button>
+
+                    <button
+                      disabled={
+                        !selectedActivity.trackingLink ||
+                        selectedActivity.reward == null
+                      }
+                      onClick={() => launchActivity(selectedActivity)}
+                      className={`rounded-xl px-5 py-3 text-xs font-black ${
+                        selectedActivity.trackingLink &&
+                        selectedActivity.reward != null
+                          ? style.button
+                          : "cursor-not-allowed bg-white/15 text-white/40"
+                      }`}
+                    >
+                      INIZIA ATTIVITÀ
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-cyan-400/15 bg-[#020a1d]/95 backdrop-blur-xl">
         <div className="mx-auto grid max-w-7xl grid-cols-4">
