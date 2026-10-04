@@ -1,0 +1,156 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  normalizeAyeTOffers,
+  type FairRewardActivity,
+} from "@/lib/inventory/ayet";
+
+const AYeT_ADSLOT_ID = process.env.AYET_ADSLOT_ID || "29639";
+const AYeT_PLACEMENT_ID = process.env.AYET_PLACEMENT_ID || "24935";
+const AYeT_BASE_URL = "https://www.ayetstudios.com";
+
+function resolveExternalIdentifier(request: NextRequest) {
+  const existing = request.cookies.get("fr_ext_id")?.value;
+
+  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
+    return { externalIdentifier: existing, setCookie: false };
+  }
+
+  return {
+    externalIdentifier: `fr_${crypto.randomUUID()}`,
+    setCookie: true,
+  };
+}
+
+function getClientIp(request: NextRequest) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
+  return "";
+}
+
+async function getDevelopmentIp() {
+  const response = await fetch("https://api.ipify.org?format=json", {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to resolve development public IP");
+  }
+
+  const data = (await response.json()) as { ip?: string };
+
+  if (!data.ip) {
+    throw new Error("Development public IP missing");
+  }
+
+  return data.ip;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const identity = resolveExternalIdentifier(request);
+    const externalIdentifier = identity.externalIdentifier;
+
+    let ip = getClientIp(request);
+
+    if (!ip) {
+      ip = await getDevelopmentIp();
+    }
+
+    if (!ip) {
+      return NextResponse.json(
+        { error: "Client IP is required for the server-side ayeT request." },
+        { status: 400 },
+      );
+    }
+
+    const userAgent = request.headers.get("user-agent") ?? "";
+    const language =
+      request.headers.get("accept-language")?.split(",")[0]?.trim() ?? "it";
+
+    const url = new URL(
+      `${AYeT_BASE_URL}/offers/offerwall_api/${AYeT_ADSLOT_ID}`,
+    );
+
+    url.searchParams.set("external_identifier", externalIdentifier);
+    url.searchParams.set("ip", ip);
+    url.searchParams.set("user_agent", userAgent);
+    url.searchParams.set("language", language);
+    url.searchParams.set("num_offers", "50");
+    url.searchParams.set("offer_sorting", "ecpm");
+    url.searchParams.set("include_mobile_offers", "true");
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          userAgent ||
+          "FairReward/2.0 (+https://github.com/rikas78/FAIR-REWARD_main)",
+      },
+      cache: "no-store",
+    });
+
+    const body = await response.text();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error: `ayeT API returned ${response.status}`,
+          details: body,
+        },
+        { status: 502 },
+      );
+    }
+
+    const payload = JSON.parse(body) as {
+      offers?: Array<Record<string, unknown>>;
+    };
+
+    const activities: FairRewardActivity[] = Array.isArray(payload.offers)
+      ? normalizeAyeTOffers(payload.offers)
+      : [];
+
+    const result = NextResponse.json(
+      {
+        provider: "ayeT",
+        placementId: AYeT_PLACEMENT_ID,
+        adslot: AYeT_ADSLOT_ID,
+        fetchedAt: new Date().toISOString(),
+        status: "success",
+        num_offers: activities.length,
+        activities,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+
+    if (identity.setCookie) {
+      result.cookies.set("fr_ext_id", externalIdentifier, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown ayeT integration error",
+      },
+      { status: 500 },
+    );
+  }
+}
