@@ -83,14 +83,64 @@ export default function PromoHome() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch("/api/ayet/offers", {
-          cache: "no-store",
+        let externalIdentifier =
+          window.localStorage.getItem("fr_ext_id") ?? "";
+
+        if (!/^fr_[0-9a-f-]{36}$/.test(externalIdentifier)) {
+          externalIdentifier = `fr_${crypto.randomUUID()}`;
+          window.localStorage.setItem("fr_ext_id", externalIdentifier);
+        }
+
+        const params = new URLSearchParams({
+          external_identifier: externalIdentifier,
+          user_agent: navigator.userAgent,
+          language: (navigator.language || "it").split("-")[0],
+          num_offers: "50",
+          offer_sorting: "ecpm",
+          include_mobile_offers: "true",
         });
+
+        const userAgentData = (
+          navigator as Navigator & {
+            userAgentData?: {
+              getHighEntropyValues?: (hints: string[]) => Promise<unknown>;
+            };
+          }
+        ).userAgentData;
+
+        if (userAgentData?.getHighEntropyValues) {
+          try {
+            const clientHints = await userAgentData.getHighEntropyValues([
+              "architecture",
+              "bitness",
+              "brands",
+              "mobile",
+              "model",
+              "platform",
+              "platformVersion",
+              "uaFullVersion",
+              "fullVersionList",
+              "wow64",
+            ]);
+
+            params.set("client_hints", JSON.stringify(clientHints));
+          } catch {
+            // Client hints are optional.
+          }
+        }
+
+        const response = await fetch(
+          `https://www.ayetstudios.com/offers/offerwall_api/29639?${params.toString()}`,
+          { cache: "no-store" },
+        );
 
         const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data?.error ?? "Impossibile leggere le attività.");
+        if (!response.ok || data?.status !== "success") {
+          throw new Error(
+            data?.error ??
+              "Impossibile leggere le attività disponibili in questo momento.",
+          );
         }
 
         if (!cancelled) {
@@ -136,13 +186,30 @@ export default function PromoHome() {
 
   function launch(offer: PromoOffer) {
     const offerId = String(offer.id ?? offer.offerId ?? "");
+    const trackingLink = String(offer.tracking_link ?? "");
 
-    if (!offerId) return;
+    if (!offerId || !trackingLink) return;
 
-    setLaunching(offerId);
-    window.location.assign(
-      `/api/ayet/launch?offerId=${encodeURIComponent(offerId)}`,
-    );
+    try {
+      const trackingUrl = new URL(trackingLink);
+
+      if (
+        trackingUrl.protocol !== "https:" ||
+        trackingUrl.hostname !== "www.ayetstudios.com"
+      ) {
+        throw new Error("Tracking destination non valida.");
+      }
+
+      trackingUrl.searchParams.set(
+        "custom_1",
+        `frdev_${crypto.randomUUID()}`,
+      );
+
+      setLaunching(offerId);
+      window.location.assign(trackingUrl.toString());
+    } catch {
+      setError("Impossibile aprire l'attività selezionata.");
+    }
   }
 
   return (
