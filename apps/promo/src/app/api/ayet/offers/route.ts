@@ -122,6 +122,7 @@ export async function GET(request: NextRequest) {
         fetchedAt: new Date().toISOString(),
         status: "success",
         num_offers: activities.length,
+        offers: Array.isArray(payload.offers) ? payload.offers : [],
         activities,
       },
       {
