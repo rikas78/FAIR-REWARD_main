@@ -18,6 +18,7 @@ type Color = "pink" | "cyan" | "yellow" | "green" | "purple" | "orange";
 type Activity = FairRewardActivity & {
   color: Color;
   rewardEstimated: boolean;
+  trackingLink: string | null;
 };
 
 const filters: Filter[] = [
@@ -300,9 +301,77 @@ export default function Home() {
     "€ " + (walletCents / 100).toFixed(2).replace(".", ",");
 
   const visible = useMemo(() => {
-    if (filter === "Tutte") return activities;
-    return activities.filter((activity) => activity.category === filter);
-  }, [activities, filter]);
+    const target = Number(goal);
+
+    const source: Activity[] =
+      filter === "Tutte"
+        ? activities
+        : activities.filter((activity) => activity.category === filter);
+
+    const candidates: Activity[] = source
+      .filter(
+        (activity) =>
+          activity.reward != null &&
+          activity.reward > 0 &&
+          activity.trackingLink != null &&
+          !activity.requirements.paymentRequired,
+      )
+      .sort((a, b) => (b.reward ?? 0) - (a.reward ?? 0))
+      .slice(0, 20);
+
+    if (!candidates.length) {
+      return source.slice(0, 6);
+    }
+
+    let best: Activity[] = [];
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    function score(selection: Activity[]): number {
+      const total = selection.reduce(
+        (sum: number, activity: Activity) => sum + (activity.reward ?? 0),
+        0,
+      );
+
+      const difference = Math.abs(total - target);
+      const overshoot = Math.max(0, total - target);
+
+      return difference + overshoot * 0.08 + selection.length * 0.002;
+    }
+
+    function visit(
+      index: number,
+      selection: Activity[],
+      total: number,
+    ): void {
+      if (selection.length > 5) return;
+
+      if (selection.length > 0) {
+        const currentScore = score(selection);
+
+        if (currentScore < bestScore) {
+          bestScore = currentScore;
+          best = [...selection];
+        }
+      }
+
+      if (index >= candidates.length) return;
+
+      for (let i = index; i < candidates.length; i += 1) {
+        const reward = candidates[i].reward ?? 0;
+        const nextTotal = total + reward;
+
+        if (nextTotal > target * 1.45) continue;
+
+        selection.push(candidates[i]);
+        visit(i + 1, selection, nextTotal);
+        selection.pop();
+      }
+    }
+
+    visit(0, [], 0);
+
+    return best.length ? best : candidates.slice(0, 5);
+  }, [activities, filter, goal]);
 
   function launchActivity(activity: Activity) {
     if (!activity.publish.ready) return;
@@ -548,7 +617,7 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-5 gap-2">
-            {["2", "5", "10", "15", "20"].map((value) => (
+            {["2", "5", "10"].map((value) => (
               <button
                 key={value}
                 onClick={() => setGoal(value)}
@@ -558,7 +627,7 @@ export default function Home() {
                     : "border-fuchsia-400/15 bg-white/[0.025] text-white/75"
                 }`}
               >
-                € {value}
+                ≈ € {value}
               </button>
             ))}
           </div>
@@ -593,14 +662,16 @@ export default function Home() {
               INVENTARIO
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
-              Attività per te
+              Percorso per circa € {goal}
             </h2>
           </div>
 
           <span className="text-xs text-white/40">
             {loadingOffers
               ? "…"
-              : `${visible.length} ${visible.length === 1 ? "offerta" : "offerte"}`}
+              : `${visible.length} ${
+                  visible.length === 1 ? "attività" : "attività"
+                } nel percorso`}
           </span>
         </div>
 
