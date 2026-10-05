@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/browser";
+import type { FairRewardActivity } from "@/lib/inventory/ayet";
 
 type Filter =
   | "Tutte"
@@ -13,26 +15,9 @@ type Filter =
 
 type Color = "pink" | "cyan" | "yellow" | "green" | "purple" | "orange";
 
-type Activity = {
-  id: string;
-  category: Filter;
+type Activity = FairRewardActivity & {
   color: Color;
-  title: string;
-  subtitle: string;
-  description: string;
-  reward: number | null;
-  providerPayout: number | null;
-  conversionTime: number | null;
-  maxConversionTime: number | null;
-  conversionType: string;
-  paymentRequired: boolean;
-  requireReservation: boolean;
-  platforms: string[];
-  devices: string[];
-  instructions: string;
-  landingPage: string | null;
-  supportUrl: string | null;
-  trackingLink: string | null;
+  rewardEstimated: boolean;
 };
 
 const filters: Filter[] = [
@@ -161,6 +146,13 @@ export default function Home() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
     null,
   );
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [walletCents, setWalletCents] = useState(0);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,71 +181,11 @@ export default function Home() {
           "orange",
         ];
 
-        const mapped: Activity[] = Array.isArray(data?.offers)
-          ? data.offers.map(
-              (offer: Record<string, unknown>, index: number) => {
-                const rewardValue = Number(offer.currency_amount ?? 0);
-                const providerPayout = Number(offer.payout ?? 0);
-
-                return {
-                  id: String(offer.id ?? offer.offer_id ?? index),
-                  category: detectCategory(offer),
-                  color: colors[index % colors.length],
-                  title: String(offer.name ?? offer.title ?? "Offerta ayeT"),
-                  subtitle: cleanText(
-                    offer.description ?? "Attività disponibile",
-                  ),
-                  description: cleanText(
-                    offer.description ??
-                      offer.introduction ??
-                      "Descrizione non disponibile.",
-                  ),
-                  reward:
-                    Number.isFinite(rewardValue) && rewardValue > 0
-                      ? rewardValue
-                      : null,
-                  providerPayout:
-                    Number.isFinite(providerPayout) && providerPayout > 0
-                      ? providerPayout
-                      : null,
-                  conversionTime:
-                    offer.conversion_time == null
-                      ? null
-                      : Number(offer.conversion_time),
-                  maxConversionTime:
-                    offer.max_conversion_time == null
-                      ? null
-                      : Number(offer.max_conversion_time),
-                  conversionType: String(
-                    offer.conversion_type ?? "conversion",
-                  ),
-                  paymentRequired: normalizeBoolean(offer.payment_required),
-                  requireReservation: normalizeBoolean(
-                    offer.require_reservation,
-                  ),
-                  platforms: normalizeArray(offer.platforms),
-                  devices: normalizeArray(offer.devices),
-                  instructions: cleanText(
-                    offer.conversion_instructions_long ??
-                      offer.conversion_instructions ??
-                      offer.conversion_instructions_short ??
-                      "",
-                  ),
-                  landingPage:
-                    typeof offer.landing_page === "string"
-                      ? offer.landing_page
-                      : null,
-                  supportUrl:
-                    typeof offer.support_url === "string"
-                      ? offer.support_url
-                      : null,
-                  trackingLink:
-                    typeof offer.tracking_link === "string"
-                      ? offer.tracking_link
-                      : null,
-                };
-              },
-            )
+        const mapped: Activity[] = Array.isArray(data?.activities)
+          ? data.activities.map((activity: Activity, index: number) => ({
+              ...activity,
+              color: colors[index % colors.length],
+            }))
           : [];
 
         if (!cancelled) {
@@ -282,17 +214,102 @@ export default function Home() {
     };
   }, []);
 
+
+  async function loadWallet(userId: string) {
+    const { data, error } = await supabase
+      .from("wallets")
+      .select("available_cents")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!error && data) {
+      setWalletCents(Number(data.available_cents ?? 0));
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAuth() {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user ?? null;
+
+      if (!active) return;
+
+      setAuthEmail(user?.email ?? null);
+
+      if (user) {
+        await loadWallet(user.id);
+      } else {
+        setWalletCents(0);
+      }
+    }
+
+    loadAuth();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        const user = session?.user ?? null;
+
+        if (!active) return;
+
+        setAuthEmail(user?.email ?? null);
+
+        if (user) {
+          await loadWallet(user.id);
+        } else {
+          setWalletCents(0);
+        }
+      },
+    );
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function login() {
+    setAuthBusy(true);
+    setAuthError(null);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginPassword,
+    });
+
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.user) {
+      setAuthEmail(data.user.email ?? null);
+      await loadWallet(data.user.id);
+      setShowLogin(false);
+      setLoginPassword("");
+    }
+
+    setAuthBusy(false);
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    setAuthEmail(null);
+    setWalletCents(0);
+  }
+
+  const walletLabel =
+    "€ " + (walletCents / 100).toFixed(2).replace(".", ",");
+
   const visible = useMemo(() => {
     if (filter === "Tutte") return activities;
     return activities.filter((activity) => activity.category === filter);
   }, [activities, filter]);
 
   function launchActivity(activity: Activity) {
-    if (!activity.trackingLink) return;
+    if (!activity.publish.ready) return;
 
     setLaunchingOffer(activity.id);
     window.location.assign(
-      `/api/ayet/launch?offerId=${encodeURIComponent(activity.id)}`,
+      `/api/ayet/launch?offerId=${encodeURIComponent(activity.offerId)}`,
     );
   }
 
@@ -317,9 +334,13 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-2 text-sm font-black">
-            € 0,00
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowLogin(true)}
+            className="rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-2 text-sm font-black"
+          >
+            {authEmail ? walletLabel : "ACCEDI"}
+          </button>
         </div>
 
         <div className="border-t border-cyan-400/10 bg-[#031029]">
@@ -341,6 +362,98 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {showLogin && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setShowLogin(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-[28px] border border-fuchsia-400/25 bg-[#06132b] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-fuchsia-300/70">
+                  ACCOUNT FAIRREWARD
+                </div>
+                <h2 className="mt-2 text-2xl font-black">
+                  {authEmail ? "Wallet" : "Accedi"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowLogin(false)}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xl text-white/70"
+              >
+                ×
+              </button>
+            </div>
+
+            {authEmail ? (
+              <div className="mt-6">
+                <div className="rounded-2xl border border-fuchsia-400/15 bg-white/[0.03] p-5">
+                  <div className="text-[10px] font-black uppercase tracking-[0.15em] text-white/40">
+                    SALDO DISPONIBILE
+                  </div>
+
+                  <div className="mt-1 text-4xl font-black text-fuchsia-400">
+                    {walletLabel}
+                  </div>
+
+                  <div className="mt-3 text-xs text-white/45">
+                    {authEmail}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="mt-4 w-full rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-xs font-black text-white/70"
+                >
+                  ESCI
+                </button>
+              </div>
+            ) : (
+              <div className="mt-6">
+                <input
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  autoComplete="email"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                <input
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="Password"
+                  type="password"
+                  autoComplete="current-password"
+                  className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                />
+
+                {authError && (
+                  <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-400/[0.05] p-3 text-xs text-orange-200">
+                    {authError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={authBusy || !loginEmail || !loginPassword}
+                  onClick={login}
+                  className="mt-4 w-full rounded-xl bg-fuchsia-500 px-5 py-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {authBusy ? "ACCESSO…" : "ACCEDI"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {menuOpen && (
         <div
@@ -485,7 +598,9 @@ export default function Home() {
           </div>
 
           <span className="text-xs text-white/40">
-            {loadingOffers ? "…" : `${visible.length} offerte`}
+            {loadingOffers
+              ? "…"
+              : `${visible.length} ${visible.length === 1 ? "offerta" : "offerte"}`}
           </span>
         </div>
 
@@ -527,7 +642,7 @@ export default function Home() {
           <div className="grid gap-4 sm:grid-cols-2">
             {visible.map((item) => {
               const style = styles[item.color];
-              const conversionLabel = formatDuration(item.conversionTime);
+              const providerWindow = item.timing.providerConversionSeconds;
 
               return (
                 <article
@@ -548,7 +663,7 @@ export default function Home() {
                         </div>
 
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
-                          {item.paymentRequired ? "A PAGAMENTO" : "GRATUITA"}
+                          {item.requirements.paymentRequired ? "A PAGAMENTO" : "GRATUITA"}
                         </div>
                       </div>
 
@@ -561,7 +676,7 @@ export default function Home() {
                       </p>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {item.devices.slice(0, 5).map((device) => (
+                        {item.requirements.devices.slice(0, 5).map((device) => (
                           <span
                             key={device}
                             className="rounded-lg border border-cyan-400/10 bg-cyan-400/[0.04] px-2 py-1 text-[10px] font-bold text-cyan-100/75"
@@ -572,24 +687,33 @@ export default function Home() {
                       </div>
 
                       <div className="mt-4 text-xs text-white/45">
-                        {conversionLabel
-                          ? `Finestra provider: ${conversionLabel}`
-                          : "Tempistica variabile"}
+                        {providerWindow != null
+                          ? `Indicatore provider: ${Math.round(
+                              providerWindow / 60,
+                            ) < 60
+                            ? `${Math.round(providerWindow / 60)} min`
+                            : `${Math.round(providerWindow / 3600)} h`}`
+                          : "Tempistica provider non specificata"}
                       </div>
                     </div>
 
                     <div className="mt-5 flex items-end justify-between gap-4">
                       <div>
                         <div className={`text-2xl font-black ${style.reward}`}>
-                          {item.reward != null
-                            ? `€ ${item.reward.toFixed(2)}`
-                            : "Reward da configurare"}
+                          {item.rewardLabel}
                         </div>
 
-                        {item.reward == null && (
-                          <div className="mt-1 max-w-[220px] text-[10px] leading-4 text-orange-300/75">
-                            Il provider sta inviando il payout, ma la ricompensa
-                            FairReward non è ancora configurata.
+                        {item.rewardMode === "fairreward_estimate" && (
+                          <div className="mt-1 max-w-[240px] text-[10px] leading-4 text-white/40">
+                            Ricompensa calcolata secondo le impostazioni
+                            economiche FairReward.
+                          </div>
+                        )}
+
+                        {item.rewardMode === "unavailable" && (
+                          <div className="mt-1 max-w-[240px] text-[10px] leading-4 text-orange-300/75">
+                            Ricompensa non disponibile: l'attività resta in
+                            verifica.
                           </div>
                         )}
                       </div>
@@ -605,10 +729,10 @@ export default function Home() {
 
                         <button
                           type="button"
-                          disabled={!item.trackingLink || item.reward == null}
+                          disabled={!item.publish.ready}
                           onClick={() => launchActivity(item)}
                           className={`rounded-xl px-5 py-3 text-xs font-black ${
-                            item.trackingLink && item.reward != null
+                            item.publish.ready
                               ? `${style.button} shadow-lg`
                               : "cursor-not-allowed bg-white/15 text-white/40"
                           }`}
@@ -638,12 +762,10 @@ export default function Home() {
           >
             {(() => {
               const style = styles[selectedActivity.color];
-              const conversionLabel = formatDuration(
-                selectedActivity.conversionTime,
-              );
-              const maxConversionLabel = formatDuration(
-                selectedActivity.maxConversionTime,
-              );
+              const providerWindow =
+                selectedActivity.timing.providerConversionSeconds;
+              const providerMaxWindow =
+                selectedActivity.timing.providerMaxConversionSeconds;
 
               return (
                 <>
@@ -678,9 +800,14 @@ export default function Home() {
                         RICOMPENSA
                       </div>
                       <div className={`mt-1 text-2xl font-black ${style.reward}`}>
-                        {selectedActivity.reward != null
-                          ? `€ ${selectedActivity.reward.toFixed(2)}`
-                          : "Da configurare"}
+                        {selectedActivity.rewardLabel}
+                      </div>
+                      <div className="mt-2 text-xs text-white/40">
+                        {selectedActivity.rewardMode === "provider"
+                          ? "Ricompensa fornita dalla configurazione valuta del provider."
+                          : selectedActivity.rewardMode === "fairreward_estimate"
+                            ? "Ricompensa calcolata dalle impostazioni economiche FairReward."
+                            : "Ricompensa non disponibile."}
                       </div>
                     </div>
 
@@ -689,7 +816,7 @@ export default function Home() {
                         PAGAMENTO
                       </div>
                       <div className="mt-1 text-lg font-black">
-                        {selectedActivity.paymentRequired
+                        {selectedActivity.requirements.paymentRequired
                           ? "Richiesto dal partner"
                           : "Nessun pagamento"}
                       </div>
@@ -702,12 +829,12 @@ export default function Home() {
                         DISPONIBILE SU
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {selectedActivity.platforms.length ||
-                        selectedActivity.devices.length ? (
+                        {selectedActivity.requirements.platforms.length ||
+                        selectedActivity.requirements.devices.length ? (
                           [
                             ...new Set([
-                              ...selectedActivity.platforms,
-                              ...selectedActivity.devices,
+                              ...selectedActivity.requirements.platforms,
+                              ...selectedActivity.requirements.devices,
                             ]),
                           ].map((item) => (
                             <span
@@ -733,15 +860,35 @@ export default function Home() {
                         Tipo: {selectedActivity.conversionType}
                       </div>
                       <div className="mt-1 text-sm text-white/55">
-                        {conversionLabel
-                          ? `Indicatore provider: ${conversionLabel}`
+                        {providerWindow != null
+                          ? `Indicatore provider: ${Math.round(
+                              providerWindow / 60,
+                            ) < 60
+                            ? `${Math.round(providerWindow / 60)} min`
+                            : `${Math.round(providerWindow / 3600)} h`}`
                           : "Tempistica non specificata"}
                       </div>
-                      {maxConversionLabel && (
+                      {providerMaxWindow != null && (
                         <div className="mt-1 text-xs text-white/40">
-                          Finestra massima provider: {maxConversionLabel}
+                          Finestra massima provider:{" "}
+                          {providerMaxWindow >= 86400
+                            ? `${Math.round(providerMaxWindow / 86400)} gg`
+                            : `${Math.round(providerMaxWindow / 3600)} h`}
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-fuchsia-400/10 bg-fuchsia-400/[0.02] p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-fuchsia-300/60">
+                      ECONOMIA FAIRREWARD
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-white/65">
+                      Costi provider: {selectedActivity.economics.expensePercent}% ·
+                      quota utente sul netto:{" "}
+                      {selectedActivity.economics.userSharePercent}% ·
+                      quota utente sul lordo:{" "}
+                      {selectedActivity.economics.fairRewardSharePercent.toFixed(1)}%
                     </div>
                   </div>
 
@@ -757,9 +904,14 @@ export default function Home() {
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/65">
-                      {selectedActivity.requireReservation
+                      {selectedActivity.requirements.reservationRequired
                         ? "Richiede prenotazione"
                         : "Nessuna prenotazione indicata"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/65">
+                      {selectedActivity.requirements.paymentRequired
+                        ? "A pagamento"
+                        : "Gratuita"}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/65">
                       Provider: ayeT
@@ -775,14 +927,10 @@ export default function Home() {
                     </button>
 
                     <button
-                      disabled={
-                        !selectedActivity.trackingLink ||
-                        selectedActivity.reward == null
-                      }
+                      disabled={!selectedActivity.publish.ready}
                       onClick={() => launchActivity(selectedActivity)}
                       className={`rounded-xl px-5 py-3 text-xs font-black ${
-                        selectedActivity.trackingLink &&
-                        selectedActivity.reward != null
+                        selectedActivity.publish.ready
                           ? style.button
                           : "cursor-not-allowed bg-white/15 text-white/40"
                       }`}
