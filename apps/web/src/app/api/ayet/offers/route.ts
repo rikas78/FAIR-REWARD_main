@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  normalizeAyeTOffers,
+  type FairRewardActivity,
+} from "@/lib/inventory/ayet";
 
-const AYeT_ADSLOT_ID = "29639";
+const AYeT_ADSLOT_ID = process.env.AYET_ADSLOT_ID || "29639";
+const AYeT_PLACEMENT_ID = process.env.AYET_PLACEMENT_ID || "24935";
 const AYeT_BASE_URL = "https://www.ayetstudios.com";
+
+function resolveExternalIdentifier(request: NextRequest) {
+  const existing = request.cookies.get("fr_ext_id")?.value;
+
+  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
+    return { externalIdentifier: existing, setCookie: false };
+  }
+
+  return {
+    externalIdentifier: `fr_${crypto.randomUUID()}`,
+    setCookie: true,
+  };
+}
 
 function getClientIp(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -31,19 +49,6 @@ async function getDevelopmentIp() {
   return data.ip;
 }
 
-function resolveExternalIdentifier(request: NextRequest) {
-  const existing = request.cookies.get("fr_ext_id")?.value;
-
-  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
-    return { externalIdentifier: existing, setCookie: false };
-  }
-
-  return {
-    externalIdentifier: `fr_${crypto.randomUUID()}`,
-    setCookie: true,
-  };
-}
-
 export async function GET(request: NextRequest) {
   try {
     const identity = resolveExternalIdentifier(request);
@@ -51,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     let ip = getClientIp(request);
 
-    if (!ip && process.env.NODE_ENV !== "production") {
+    if (!ip) {
       ip = await getDevelopmentIp();
     }
 
@@ -101,14 +106,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const payload = JSON.parse(body);
+    const payload = JSON.parse(body) as {
+      offers?: Array<Record<string, unknown>>;
+    };
+
+    const activities: FairRewardActivity[] = Array.isArray(payload.offers)
+      ? normalizeAyeTOffers(payload.offers)
+      : [];
 
     const result = NextResponse.json(
       {
         provider: "ayeT",
+        placementId: AYeT_PLACEMENT_ID,
         adslot: AYeT_ADSLOT_ID,
         fetchedAt: new Date().toISOString(),
-        ...payload,
+        status: "success",
+        num_offers: activities.length,
+        activities,
       },
       {
         headers: {

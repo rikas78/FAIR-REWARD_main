@@ -18,3 +18,6 @@ logs/
 playwright-report/
 test-results/
 exports/
+providers/ayeT/.env.local
+.vercel
+.env*
