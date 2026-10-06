@@ -1,4 +1,5 @@
 export type FairRewardActivity = {
+  trackingLink: string | null;
   id: string;
   source: "ayet";
   provider: "ayeT";
@@ -249,6 +250,7 @@ export function normalizeAyeTOffer(
   }
 
   return {
+    trackingLink: typeof offer.tracking_link === "string" ? offer.tracking_link : null,
     id: `ayet:${offerId}`,
     source: "ayet",
     provider: "ayeT",
