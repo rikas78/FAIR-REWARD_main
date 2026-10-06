@@ -121,6 +121,19 @@ export async function GET(request: NextRequest) {
         adslot: AYeT_ADSLOT_ID,
         fetchedAt: new Date().toISOString(),
         status: "success",
+        providerStatus:
+          typeof (payload as { status?: unknown }).status === "string"
+            ? String((payload as { status?: unknown }).status)
+            : "success",
+        providerNumOffers: Array.isArray(payload.offers)
+          ? payload.offers.length
+          : 0,
+        rawOfferCount: Array.isArray(payload.offers)
+          ? payload.offers.length
+          : 0,
+        publishableOffers: activities.filter(
+          (activity) => activity.publish.ready,
+        ).length,
         num_offers: activities.length,
         activities,
       },
