@@ -149,9 +149,12 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  const providerPayout = asNumber(offer.payout);
-  const currencyAmount = asNumber(offer.currency_amount);
+  // ayeT separates the provider payout from the user's virtual currency.
+  // currency_amount is NOT EUR, so it must never be displayed as EUR.
+  const providerPayout = asNumber(offer.payout_usd ?? offer.payout);
 
+  // Keep FairReward economics out of the displayed reward until the
+  // placement has an explicit configured EUR conversion.
   const expensePercent = 25;
   const userSharePercent = 50;
   const fairRewardSharePercent =
@@ -172,27 +175,11 @@ export function normalizeAyeTOffer(
     (providerMaxConversionSeconds ?? 0) > 86400 ||
     (providerConversionSeconds ?? 0) > 3600;
 
-  let reward: number | null = null;
-  let rewardMode: FairRewardActivity["rewardMode"] = "unavailable";
-
-  if (currencyAmount != null && currencyAmount > 0) {
-    reward = Number(currencyAmount.toFixed(2));
-    rewardMode = "provider";
-  } else if (providerPayout != null && providerPayout > 0) {
-    reward = Number(
-      (providerPayout * (fairRewardSharePercent / 100)).toFixed(2),
-    );
-    rewardMode = "fairreward_estimate";
-  }
-
-  let rewardLabel = "Ricompensa non disponibile";
-
-  if (reward != null) {
-    rewardLabel =
-      isMilestoneOrLongForm && rewardMode === "fairreward_estimate"
-        ? `Fino a € ${reward.toFixed(2)}`
-        : `€ ${reward.toFixed(2)}`;
-  }
+  // No EUR reward is shown until FairReward has an explicit,
+  // configured conversion for this placement.
+  const reward: number | null = null;
+  const rewardMode: FairRewardActivity["rewardMode"] = "unavailable";
+  const rewardLabel = "Ricompensa da configurare";
 
   const platforms = asArray(offer.platforms);
   const devices = asArray(offer.devices);
@@ -220,8 +207,7 @@ export function normalizeAyeTOffer(
     offerId &&
       asString(offer.name) &&
       typeof offer.tracking_link === "string" &&
-      offer.tracking_link &&
-      reward != null,
+      offer.tracking_link,
   );
 
   let reason: string | null = null;
@@ -230,8 +216,6 @@ export function normalizeAyeTOffer(
     reason = "Offer ID mancante";
   } else if (!offer.tracking_link) {
     reason = "Tracking link mancante";
-  } else if (reward == null) {
-    reason = "Ricompensa non disponibile";
   }
 
   return {
@@ -241,7 +225,8 @@ export function normalizeAyeTOffer(
 
     offerId,
     title: asString(offer.name) || "Offerta ayeT",
-    subtitle: description,
+    // Keep provider-facing monetary wording out of the FairReward card.
+    subtitle: "Attività disponibile secondo le condizioni del partner.",
     description,
     instructions,
 

@@ -783,8 +783,8 @@ export default function Home() {
 
                         {item.rewardMode === "unavailable" && (
                           <div className="mt-1 max-w-[240px] text-[10px] leading-4 text-orange-300/75">
-                            Ricompensa non disponibile: l'attività resta in
-                            verifica.
+                            Ricompensa non ancora configurata per questa
+                            integrazione.
                           </div>
                         )}
                       </div>
