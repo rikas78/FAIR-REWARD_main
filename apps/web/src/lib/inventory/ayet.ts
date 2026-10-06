@@ -34,6 +34,7 @@ export type FairRewardActivity = {
 
   timing: {
     activityDurationSeconds: number | null;
+    activityDurationSource: "provider_conversion" | "unknown";
     providerConversionSeconds: number | null;
     providerMaxConversionSeconds: number | null;
     isMilestoneOrLongForm: boolean;
@@ -153,12 +154,36 @@ export function normalizeAyeTOffer(
   // currency_amount is NOT EUR, so it must never be displayed as EUR.
   const providerPayout = asNumber(offer.payout_usd ?? offer.payout);
 
-  // Keep FairReward economics out of the displayed reward until the
-  // placement has an explicit configured EUR conversion.
+  // FairReward preview economics:
+  // 25% provider/network costs.
+  // User receives 50% of the remaining 75%.
+  // Effective user share = 37.5% of provider payout.
   const expensePercent = 25;
   const userSharePercent = 50;
   const fairRewardSharePercent =
     (100 - expensePercent) * (userSharePercent / 100);
+
+  // ECB reference rate fallback for the live technical preview.
+  // Configurable later through NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE.
+  // ECB 6 Oct 2026: 1 EUR = 1.1269 USD.
+  const configuredUsdPerEur = Number(
+    process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
+  );
+  const usdPerEur =
+    Number.isFinite(configuredUsdPerEur) && configuredUsdPerEur > 0
+      ? configuredUsdPerEur
+      : 1.1269;
+
+  const usdToEur = 1 / usdPerEur;
+
+  const providerPayoutEur =
+    providerPayout != null ? providerPayout * usdToEur : null;
+
+  const calculatedReward =
+    providerPayoutEur != null
+      ? Math.round(providerPayoutEur * (fairRewardSharePercent / 100) * 100) /
+        100
+      : null;
 
   const category = detectCategory(offer);
   const activityType = detectActivityType(offer, category);
@@ -177,9 +202,14 @@ export function normalizeAyeTOffer(
 
   // No EUR reward is shown until FairReward has an explicit,
   // configured conversion for this placement.
-  const reward: number | null = null;
-  const rewardMode: FairRewardActivity["rewardMode"] = "unavailable";
-  const rewardLabel = "Ricompensa da configurare";
+  const reward: number | null = calculatedReward;
+  const rewardMode: FairRewardActivity["rewardMode"] =
+    calculatedReward != null ? "fairreward_estimate" : "unavailable";
+
+  const rewardLabel =
+    calculatedReward != null
+      ? `€ ${calculatedReward.toFixed(2)}`
+      : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
   const devices = asArray(offer.devices);
@@ -246,7 +276,11 @@ export function normalizeAyeTOffer(
     },
 
     timing: {
-      activityDurationSeconds: null,
+      activityDurationSeconds: providerConversionSeconds,
+      activityDurationSource:
+        providerConversionSeconds != null
+          ? "provider_conversion"
+          : "unknown",
       providerConversionSeconds,
       providerMaxConversionSeconds,
       isMilestoneOrLongForm,

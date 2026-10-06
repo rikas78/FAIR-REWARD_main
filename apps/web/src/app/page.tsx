@@ -140,6 +140,11 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("Tutte");
   const [time, setTime] = useState("10");
   const [goal, setGoal] = useState("5");
+
+  const [appliedFilter, setAppliedFilter] = useState<Filter>("Tutte");
+  const [appliedTime, setAppliedTime] = useState("10");
+  const [appliedGoal, setAppliedGoal] = useState("5");
+  const [filtersApplied, setFiltersApplied] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offerError, setOfferError] = useState<string | null>(null);
@@ -300,35 +305,64 @@ export default function Home() {
   const walletLabel =
     "€ " + (walletCents / 100).toFixed(2).replace(".", ",");
 
+  const rewardConfiguredCount = useMemo(
+    () =>
+      activities.filter(
+        (activity) => activity.reward != null && activity.reward > 0,
+      ).length,
+    [activities],
+  );
+
+  const pendingFilterChanges =
+    filter !== appliedFilter ||
+    time !== appliedTime ||
+    goal !== appliedGoal;
+
   const visible = useMemo(() => {
-    const target = Number(goal);
-
-    const source: Activity[] =
-      filter === "Tutte"
+    const source =
+      appliedFilter === "Tutte"
         ? activities
-        : activities.filter((activity) => activity.category === filter);
+        : activities.filter(
+            (activity) => activity.category === appliedFilter,
+          );
 
-    const candidates: Activity[] = source
+    let candidates = source.filter(
+      (activity) =>
+        activity.trackingLink != null &&
+        !activity.requirements.paymentRequired,
+    );
+
+    if (filtersApplied) {
+      const maxMinutes = Number(appliedTime);
+
+      candidates = candidates.filter((activity) => {
+        const seconds = activity.timing.activityDurationSeconds;
+
+        return seconds != null && seconds <= maxMinutes * 60;
+      });
+    }
+
+    const rewarded = candidates
       .filter(
         (activity) =>
-          activity.reward != null &&
-          activity.reward > 0 &&
-          activity.trackingLink != null &&
-          !activity.requirements.paymentRequired,
+          activity.reward != null && activity.reward > 0,
       )
       .sort((a, b) => (b.reward ?? 0) - (a.reward ?? 0))
       .slice(0, 20);
 
-    if (!candidates.length) {
-      return source.slice(0, 6);
+    if (!filtersApplied || rewarded.length === 0) {
+      return candidates.slice(0, 20);
     }
+
+    const target = Number(appliedGoal);
 
     let best: Activity[] = [];
     let bestScore = Number.POSITIVE_INFINITY;
 
     function score(selection: Activity[]): number {
       const total = selection.reduce(
-        (sum: number, activity: Activity) => sum + (activity.reward ?? 0),
+        (sum: number, activity: Activity) =>
+          sum + (activity.reward ?? 0),
         0,
       );
 
@@ -354,15 +388,15 @@ export default function Home() {
         }
       }
 
-      if (index >= candidates.length) return;
+      if (index >= rewarded.length) return;
 
-      for (let i = index; i < candidates.length; i += 1) {
-        const reward = candidates[i].reward ?? 0;
+      for (let i = index; i < rewarded.length; i += 1) {
+        const reward = rewarded[i].reward ?? 0;
         const nextTotal = total + reward;
 
         if (nextTotal > target * 1.45) continue;
 
-        selection.push(candidates[i]);
+        selection.push(rewarded[i]);
         visit(i + 1, selection, nextTotal);
         selection.pop();
       }
@@ -370,8 +404,14 @@ export default function Home() {
 
     visit(0, [], 0);
 
-    return best.length ? best : candidates.slice(0, 5);
-  }, [activities, filter, goal]);
+    return best.length ? best : rewarded.slice(0, 5);
+  }, [
+    activities,
+    appliedFilter,
+    appliedTime,
+    appliedGoal,
+    filtersApplied,
+  ]);
 
   function launchActivity(activity: Activity) {
     if (!activity.publish.ready) return;
@@ -600,7 +640,7 @@ export default function Home() {
                 onClick={() => setTime(value)}
                 className={`rounded-xl border py-3 text-sm font-black ${
                   time === value
-                    ? "border-fuchsia-400 bg-fuchsia-500"
+                    ? "border-fuchsia-400 bg-fuchsia-500 text-white"
                     : "border-cyan-400/15 bg-white/[0.025] text-white/75"
                 }`}
               >
@@ -616,20 +656,70 @@ export default function Home() {
             <span className="font-black">Quanto vuoi guadagnare?</span>
           </div>
 
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {["2", "5", "10"].map((value) => (
               <button
                 key={value}
                 onClick={() => setGoal(value)}
                 className={`rounded-xl border py-3 text-xs font-black ${
                   goal === value
-                    ? "border-fuchsia-400 bg-fuchsia-500"
+                    ? "border-fuchsia-400 bg-fuchsia-500 text-white"
                     : "border-fuchsia-400/15 bg-white/[0.025] text-white/75"
                 }`}
               >
-                ≈ € {value}
+                Fino a € {value}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 rounded-3xl border border-white/10 bg-[#06132b] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-bold text-white/70">
+                {pendingFilterChanges
+                  ? "Hai modifiche non ancora applicate."
+                  : filtersApplied
+                    ? "✓ Filtri applicati"
+                    : "Imposta i filtri e conferma la ricerca."}
+              </div>
+
+              {filtersApplied && rewardConfiguredCount === 0 && (
+                <div className="mt-2 text-xs leading-5 text-amber-100/70">
+                  Nessuna ricompensa calcolabile per le offerte attualmente
+                  disponibili.
+                </div>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => {
+                  setFilter("Tutte");
+                  setTime("10");
+                  setGoal("5");
+                  setAppliedFilter("Tutte");
+                  setAppliedTime("10");
+                  setAppliedGoal("5");
+                  setFiltersApplied(false);
+                }}
+                className="rounded-xl border border-white/10 px-4 py-3 text-xs font-black text-white/60 hover:bg-white/[0.06]"
+              >
+                RESET FILTRI
+              </button>
+
+              <button
+                onClick={() => {
+                  setAppliedFilter(filter);
+                  setAppliedTime(time);
+                  setAppliedGoal(goal);
+                  setFiltersApplied(true);
+                }}
+                className="rounded-xl bg-white px-5 py-3 text-xs font-black text-black hover:bg-white/90"
+              >
+                APPLICA FILTRI
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -662,7 +752,7 @@ export default function Home() {
               INVENTARIO
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
-              Percorso per circa € {goal}
+              Percorso per circa € {appliedGoal}
             </h2>
           </div>
 
@@ -670,8 +760,8 @@ export default function Home() {
             {loadingOffers
               ? "…"
               : `${visible.length} ${
-                  visible.length === 1 ? "attività" : "attività"
-                } nel percorso`}
+                  visible.length === 1 ? "attività trovata" : "attività trovate"
+                }`}
           </span>
         </div>
 
@@ -759,7 +849,7 @@ export default function Home() {
 
                       <div className="mt-4 text-xs text-white/45">
                         {providerWindow != null
-                          ? `Indicatore provider: ${Math.round(
+                          ? `Tempo indicativo provider: ${Math.round(
                               providerWindow / 60,
                             ) < 60
                             ? `${Math.round(providerWindow / 60)} min`
@@ -932,7 +1022,7 @@ export default function Home() {
                       </div>
                       <div className="mt-1 text-sm text-white/55">
                         {providerWindow != null
-                          ? `Indicatore provider: ${Math.round(
+                          ? `Tempo indicativo provider: ${Math.round(
                               providerWindow / 60,
                             ) < 60
                             ? `${Math.round(providerWindow / 60)} min`
