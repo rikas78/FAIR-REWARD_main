@@ -140,10 +140,12 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("Tutte");
   const [time, setTime] = useState("10");
   const [goal, setGoal] = useState("5");
+  const [timeEnabled, setTimeEnabled] = useState(false);
+  const [goalEnabled, setGoalEnabled] = useState(false);
 
   const [appliedFilter, setAppliedFilter] = useState<Filter>("Tutte");
-  const [appliedTime, setAppliedTime] = useState("10");
-  const [appliedGoal, setAppliedGoal] = useState("5");
+  const [appliedTime, setAppliedTime] = useState<string | null>(null);
+  const [appliedGoal, setAppliedGoal] = useState<string | null>(null);
   const [filtersApplied, setFiltersApplied] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
@@ -315,8 +317,8 @@ export default function Home() {
 
   const pendingFilterChanges =
     filter !== appliedFilter ||
-    time !== appliedTime ||
-    goal !== appliedGoal;
+    (timeEnabled ? time : null) !== appliedTime ||
+    (goalEnabled ? goal : null) !== appliedGoal;
 
   const visible = useMemo(() => {
     const source =
@@ -332,7 +334,7 @@ export default function Home() {
         !activity.requirements.paymentRequired,
     );
 
-    if (filtersApplied) {
+    if (appliedTime != null) {
       const maxMinutes = Number(appliedTime);
 
       candidates = candidates.filter((activity) => {
@@ -350,7 +352,7 @@ export default function Home() {
       .sort((a, b) => (b.reward ?? 0) - (a.reward ?? 0))
       .slice(0, 20);
 
-    if (!filtersApplied || rewarded.length === 0) {
+    if (appliedGoal == null || rewarded.length === 0) {
       return candidates.slice(0, 20);
     }
 
@@ -628,9 +630,23 @@ export default function Home() {
 
       <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-5 lg:grid-cols-2">
         <div className="rounded-3xl border border-cyan-400/20 bg-[#06132b] p-4">
-          <div className="mb-3 flex items-center gap-3">
-            <span className="text-2xl text-cyan-400">◷</span>
-            <span className="font-black">Quanto tempo hai?</span>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl text-cyan-400">◷</span>
+              <span className="font-black">Quanto tempo hai?</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTimeEnabled((value) => !value)}
+              aria-pressed={timeEnabled}
+              className={`rounded-full border px-3 py-2 text-[10px] font-black ${
+                timeEnabled
+                  ? "border-cyan-300 bg-cyan-400 text-[#06101f]"
+                  : "border-white/10 bg-white/[0.04] text-white/45"
+              }`}
+            >
+              {timeEnabled ? "ON" : "OFF"}
+            </button>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -651,9 +667,23 @@ export default function Home() {
         </div>
 
         <div className="rounded-3xl border border-fuchsia-400/20 bg-[#06132b] p-4">
-          <div className="mb-3 flex items-center gap-3">
-            <span className="text-2xl text-fuchsia-400">◎</span>
-            <span className="font-black">Quanto vuoi guadagnare?</span>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl text-fuchsia-400">◎</span>
+              <span className="font-black">Quanto vuoi guadagnare?</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGoalEnabled((value) => !value)}
+              aria-pressed={goalEnabled}
+              className={`rounded-full border px-3 py-2 text-[10px] font-black ${
+                goalEnabled
+                  ? "border-fuchsia-300 bg-fuchsia-500 text-white"
+                  : "border-white/10 bg-white/[0.04] text-white/45"
+              }`}
+            >
+              {goalEnabled ? "ON" : "OFF"}
+            </button>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -698,9 +728,11 @@ export default function Home() {
                   setFilter("Tutte");
                   setTime("10");
                   setGoal("5");
+                  setTimeEnabled(false);
+                  setGoalEnabled(false);
                   setAppliedFilter("Tutte");
-                  setAppliedTime("10");
-                  setAppliedGoal("5");
+                  setAppliedTime(null);
+                  setAppliedGoal(null);
                   setFiltersApplied(false);
                 }}
                 className="rounded-xl border border-white/10 px-4 py-3 text-xs font-black text-white/60 hover:bg-white/[0.06]"
@@ -711,9 +743,11 @@ export default function Home() {
               <button
                 onClick={() => {
                   setAppliedFilter(filter);
-                  setAppliedTime(time);
-                  setAppliedGoal(goal);
-                  setFiltersApplied(true);
+                  setAppliedTime(timeEnabled ? time : null);
+                  setAppliedGoal(goalEnabled ? goal : null);
+                  setFiltersApplied(
+                    filter !== "Tutte" || timeEnabled || goalEnabled,
+                  );
                 }}
                 className="rounded-xl bg-white px-5 py-3 text-xs font-black text-black hover:bg-white/90"
               >
@@ -752,7 +786,13 @@ export default function Home() {
               INVENTARIO
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
-              Percorso per circa € {appliedGoal}
+              {appliedGoal != null
+                ? `Percorso per circa € ${appliedGoal}`
+                : appliedTime != null
+                  ? `Attività entro ${appliedTime} min`
+                  : appliedFilter !== "Tutte"
+                    ? `Attività: ${appliedFilter}`
+                    : "Tutte le attività"}
             </h2>
           </div>
 
