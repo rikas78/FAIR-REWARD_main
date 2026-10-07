@@ -337,25 +337,34 @@ export default function Home() {
     if (appliedTime != null) {
       const targetSeconds = Number(appliedTime) * 60;
 
-      // "5 minuti" means approximately 5 minutes, not "anything below
-      // 5 minutes". Prefer activities close to the requested duration.
-      // A ±50% window keeps the result useful while adapting to the
-      // inventory that ayeT makes available on that day.
-      const toleranceSeconds = Math.max(120, targetSeconds * 0.5);
+      // "5 minuti" is an approximate intent, not a hard upper limit.
+      // For normal activities use the normalized duration. For CPE/game
+      // campaigns use ayeT's provider conversion time as the closest
+      // available indication, while the card explicitly explains that
+      // the campaign is multi-step.
+      const toleranceSeconds = Math.max(120, targetSeconds * 0.75);
 
       candidates = candidates
         .filter((activity) => {
-          const seconds = activity.timing.activityDurationSeconds;
+          const seconds =
+            activity.timing.activityDurationSeconds ??
+            activity.timing.providerConversionSeconds;
 
-          if (seconds == null || activity.timing.isMilestoneOrLongForm) {
-            return false;
-          }
-
-          return Math.abs(seconds - targetSeconds) <= toleranceSeconds;
+          return (
+            seconds != null &&
+            Math.abs(seconds - targetSeconds) <= toleranceSeconds
+          );
         })
         .sort((a, b) => {
-          const aSeconds = a.timing.activityDurationSeconds ?? Infinity;
-          const bSeconds = b.timing.activityDurationSeconds ?? Infinity;
+          const aSeconds =
+            a.timing.activityDurationSeconds ??
+            a.timing.providerConversionSeconds ??
+            Infinity;
+
+          const bSeconds =
+            b.timing.activityDurationSeconds ??
+            b.timing.providerConversionSeconds ??
+            Infinity;
 
           return (
             Math.abs(aSeconds - targetSeconds) -
@@ -941,7 +950,10 @@ export default function Home() {
 
                     <div className="mt-5 flex items-end justify-between gap-4">
                       <div>
-                        <div className={`text-2xl font-black ${style.reward}`}>
+                        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                          RICOMPENSA
+                        </div>
+                        <div className={`mt-1 text-2xl font-black ${style.reward}`}>
                           {item.rewardLabel}
                         </div>
 
