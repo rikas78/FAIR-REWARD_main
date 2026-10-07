@@ -151,10 +151,24 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // ayeT separates the real provider payout from the offerwall virtual currency.
-  // currency_amount is NOT EUR and must never be used as a EUR reward.
-  // payout_usd is the authoritative provider payout field.
-  const providerPayout = asNumber(offer.payout_usd);
+  // ayeT exposes standard offer payouts in payout_usd.
+  // Live CPE offers can instead expose the campaign payout in payout/payout_base
+  // together with cpe_total_rewards_currency_name (for example "euro").
+  // currency_amount is the offerwall virtual currency and must NOT be
+  // interpreted as EUR.
+  const providerPayoutUsd = asNumber(offer.payout_usd);
+  const providerPayoutFallback = asNumber(offer.payout);
+
+  const payoutCurrency = asString(
+    offer.cpe_total_rewards_currency_name ?? offer.currency ?? "",
+  ).toLowerCase();
+
+  const providerPayout =
+    providerPayoutUsd ?? providerPayoutFallback;
+
+  const providerPayoutIsEur =
+    providerPayoutUsd == null &&
+    (payoutCurrency === "euro" || payoutCurrency === "eur");
 
   // FairReward preview economics:
   // 25% provider/network costs.
@@ -179,7 +193,11 @@ export function normalizeAyeTOffer(
   const usdToEur = 1 / usdPerEur;
 
   const providerPayoutEur =
-    providerPayout != null ? providerPayout * usdToEur : null;
+    providerPayout != null
+      ? providerPayoutIsEur
+        ? providerPayout
+        : providerPayout * usdToEur
+      : null;
 
   const calculatedReward =
     providerPayoutEur != null
