@@ -8,6 +8,34 @@ const AYeT_ADSLOT_ID = process.env.AYET_ADSLOT_ID || "29639";
 const AYeT_PLACEMENT_ID = process.env.AYET_PLACEMENT_ID || "24935";
 const AYeT_BASE_URL = "https://www.ayetstudios.com";
 
+function summarizeProviderFields(offers: unknown) {
+  const list = Array.isArray(offers)
+    ? (offers as Array<Record<string, unknown>>)
+    : [];
+
+  const num = (v: unknown) =>
+    v !== null &&
+    v !== undefined &&
+    v !== "" &&
+    Number.isFinite(Number(v));
+
+  return {
+    offers: list.length,
+    payout_usd: list.filter((o) => num(o.payout_usd)).length,
+    payout: list.filter((o) => num(o.payout)).length,
+    currency_amount_positive: list.filter(
+      (o) => num(o.currency_amount) && Number(o.currency_amount) > 0,
+    ).length,
+    conversion_time: list.filter((o) => num(o.conversion_time)).length,
+    tracking_link: list.filter(
+      (o) =>
+        typeof o.tracking_link === "string" &&
+        o.tracking_link !== "",
+    ).length,
+  };
+}
+
+
 function resolveExternalIdentifier(request: NextRequest) {
   const existing = request.cookies.get("fr_ext_id")?.value;
 
@@ -135,6 +163,7 @@ export async function GET(request: NextRequest) {
           (activity) => activity.publish.ready,
         ).length,
         num_offers: activities.length,
+        fieldCoverage: summarizeProviderFields(payload.offers),
         activities,
       },
       {
