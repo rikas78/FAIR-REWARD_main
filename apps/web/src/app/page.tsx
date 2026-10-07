@@ -364,10 +364,15 @@ export default function Home() {
         });
     }
 
+    // The goal planner works with comparable single-step rewards only.
+    // CPE/game/multi-step campaigns can show their potential value on the
+    // card, but that total cannot be treated as one activity worth €X.
     const rewarded = candidates
       .filter(
         (activity) =>
-          activity.reward != null && activity.reward > 0,
+          activity.reward != null &&
+          activity.reward > 0 &&
+          !activity.timing.isMilestoneOrLongForm,
       )
       .sort((a, b) => {
         const aReward = a.reward ?? 0;

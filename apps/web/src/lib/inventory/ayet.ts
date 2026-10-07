@@ -207,11 +207,11 @@ export function normalizeAyeTOffer(
     (providerMaxConversionSeconds ?? 0) > 86400 ||
     (providerConversionSeconds ?? 0) > 3600;
 
-  // A multi-step campaign has a total potential payout, not a single
-  // immediately comparable task reward. Keep the provider amount for
-  // diagnostics, but do not let it enter the FairReward goal planner.
-  const reward: number | null =
-    isMilestoneOrLongForm ? null : calculatedReward;
+  // Keep the real calculated economic value available to the UI.
+  // For multi-step/CPE campaigns this is the potential campaign value,
+  // not the reward of one single task. The planner decides separately
+  // whether the value is comparable with a single activity.
+  const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
     calculatedReward != null ? "fairreward_estimate" : "unavailable";
