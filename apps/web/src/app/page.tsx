@@ -143,7 +143,6 @@ export default function Home() {
   const [timeEnabled, setTimeEnabled] = useState(false);
   const [goalEnabled, setGoalEnabled] = useState(false);
 
-  const [appliedFilter, setAppliedFilter] = useState<Filter>("Tutte");
   const [appliedTime, setAppliedTime] = useState<string | null>(null);
   const [appliedGoal, setAppliedGoal] = useState<string | null>(null);
   const [filtersApplied, setFiltersApplied] = useState(false);
@@ -316,16 +315,15 @@ export default function Home() {
   );
 
   const pendingFilterChanges =
-    filter !== appliedFilter ||
     (timeEnabled ? time : null) !== appliedTime ||
     (goalEnabled ? goal : null) !== appliedGoal;
 
   const visible = useMemo(() => {
     const source =
-      appliedFilter === "Tutte"
+      filter === "Tutte"
         ? activities
         : activities.filter(
-            (activity) => activity.category === appliedFilter,
+            (activity) => activity.category === filter,
           );
 
     let candidates = source.filter(
@@ -455,7 +453,7 @@ export default function Home() {
     return best.length ? best : rewarded.slice(0, 5);
   }, [
     activities,
-    appliedFilter,
+    filter,
     appliedTime,
     appliedGoal,
     filtersApplied,
@@ -754,10 +752,10 @@ export default function Home() {
             <div>
               <div className="text-sm font-bold text-white/70">
                 {pendingFilterChanges
-                  ? "Hai modifiche non ancora applicate."
+                  ? "Hai modifiche ai filtri tempo/guadagno non ancora applicate."
                   : filtersApplied
-                    ? "✓ Filtri applicati"
-                    : "Imposta i filtri e conferma la ricerca."}
+                    ? "✓ Filtri tempo/guadagno applicati"
+                    : "Le categorie si aggiornano subito. Usa i filtri solo per tempo e guadagno."}
               </div>
 
               {filtersApplied && rewardConfiguredCount === 0 && (
@@ -776,7 +774,6 @@ export default function Home() {
                   setGoal("5");
                   setTimeEnabled(false);
                   setGoalEnabled(false);
-                  setAppliedFilter("Tutte");
                   setAppliedTime(null);
                   setAppliedGoal(null);
                   setFiltersApplied(false);
@@ -788,12 +785,9 @@ export default function Home() {
 
               <button
                 onClick={() => {
-                  setAppliedFilter(filter);
                   setAppliedTime(timeEnabled ? time : null);
                   setAppliedGoal(goalEnabled ? goal : null);
-                  setFiltersApplied(
-                    filter !== "Tutte" || timeEnabled || goalEnabled,
-                  );
+                  setFiltersApplied(timeEnabled || goalEnabled);
                 }}
                 className="rounded-xl bg-white px-5 py-3 text-xs font-black text-black hover:bg-white/90"
               >
@@ -835,11 +829,11 @@ export default function Home() {
               {appliedGoal != null && appliedTime != null
                 ? `Percorso per circa € ${appliedGoal} · circa ${appliedTime} min`
                 : appliedGoal != null
-                  ? `Percorso per circa € ${appliedGoal}`
+                  ? `Attività per circa € ${appliedGoal}`
                   : appliedTime != null
                     ? `Attività per circa ${appliedTime} min`
-                    : appliedFilter !== "Tutte"
-                      ? `Attività: ${appliedFilter}`
+                    : filter !== "Tutte"
+                      ? `Attività: ${filter}`
                       : "Tutte le attività"}
             </h2>
           </div>

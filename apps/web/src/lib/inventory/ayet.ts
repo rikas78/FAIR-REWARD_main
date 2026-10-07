@@ -152,26 +152,35 @@ export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
   // ayeT economics:
-  // payout_usd = payout reale del publisher/network in USD.
-  // currency_amount = valuta virtuale del placement assegnata all'utente.
-  // offer.payout / payout_base NON devono essere interpretati come EUR.
+  // payout_usd = payout reale della conversione/campagna in USD.
+  // currency_amount = valuta virtuale del placement: NON è EUR.
+  // FairReward mostra un guadagno stimato in EUR sulla base del payout
+  // reale del provider e dell'economia FairReward.
   const providerPayoutUsd = asNumber(offer.payout_usd);
-  const userCurrencyAmount = asNumber(offer.currency_amount);
 
-  const userCurrencyIdentifier = asString(
-    offer.currency_identifier ??
-      offer.currency ??
-      offer.cpe_total_rewards_currency_name ??
-      "",
+  const configuredUsdPerEur = Number(
+    process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
   );
+  const usdPerEur =
+    Number.isFinite(configuredUsdPerEur) && configuredUsdPerEur > 0
+      ? configuredUsdPerEur
+      : 1.1269;
 
-  const currencyConversionRate =
-    asNumber(offer.currency_conversion_rate) ?? null;
+  const expensePercent = 25;
+  const userSharePercent = 50;
+  const fairRewardSharePercent =
+    (100 - expensePercent) * (userSharePercent / 100);
 
-  // Il valore mostrato nella card è quello della valuta del placement.
+  const providerPayoutEur =
+    providerPayoutUsd != null
+      ? providerPayoutUsd / usdPerEur
+      : null;
+
   const calculatedReward =
-    userCurrencyAmount != null && Number.isFinite(userCurrencyAmount)
-      ? Math.round(userCurrencyAmount * 100) / 100
+    providerPayoutEur != null
+      ? Math.round(
+          providerPayoutEur * (fairRewardSharePercent / 100) * 100,
+        ) / 100
       : null;
 
   const category = detectCategory(offer);
@@ -201,14 +210,14 @@ export function normalizeAyeTOffer(
   const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
-    calculatedReward != null ? "provider" : "unavailable";
+    calculatedReward != null ? "fairreward_estimate" : "unavailable";
 
   const rewardLabel = isMilestoneOrLongForm
     ? calculatedReward != null
-      ? `Fino a ${calculatedReward.toFixed(2)} ${userCurrencyIdentifier || "punti"}`
-      : "Ricompensa variabile"
+      ? `Fino a € ${calculatedReward.toFixed(2)}`
+      : "Ricompensa non disponibile"
     : calculatedReward != null
-      ? `${calculatedReward.toFixed(2)} ${userCurrencyIdentifier || "punti"}`
+      ? `≈ € ${calculatedReward.toFixed(2)}`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
@@ -271,9 +280,9 @@ export function normalizeAyeTOffer(
 
     economics: {
       providerPayout: providerPayoutUsd,
-      expensePercent: 0,
-      userSharePercent: 0,
-      fairRewardSharePercent: 0,
+      expensePercent,
+      userSharePercent,
+      fairRewardSharePercent,
     },
 
     timing: {
