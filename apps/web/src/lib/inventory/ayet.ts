@@ -151,9 +151,10 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // ayeT separates the provider payout from the user's virtual currency.
-  // currency_amount is NOT EUR, so it must never be displayed as EUR.
-  const providerPayout = asNumber(offer.payout_usd ?? offer.payout);
+  // ayeT separates the real provider payout from the offerwall virtual currency.
+  // currency_amount is NOT EUR and must never be used as a EUR reward.
+  // payout_usd is the authoritative provider payout field.
+  const providerPayout = asNumber(offer.payout_usd);
 
   // FairReward preview economics:
   // 25% provider/network costs.
@@ -195,21 +196,32 @@ export function normalizeAyeTOffer(
     offer.max_conversion_time,
   );
 
+  // CPE campaigns and game campaigns can contain multiple milestones.
+  // ayeT may expose conversion_time=300 for the campaign entry even though
+  // the campaign contains several tasks spread over a much longer window.
+  // Therefore that raw provider value must NOT be treated as the duration
+  // of one user activity.
   const isMilestoneOrLongForm =
     conversionType.toLowerCase() === "cpe" ||
     category === "Giochi" ||
     (providerMaxConversionSeconds ?? 0) > 86400 ||
     (providerConversionSeconds ?? 0) > 3600;
 
-  // No EUR reward is shown until FairReward has an explicit,
-  // configured conversion for this placement.
-  const reward: number | null = calculatedReward;
+  // A multi-step campaign has a total potential payout, not a single
+  // immediately comparable task reward. Keep the provider amount for
+  // diagnostics, but do not let it enter the FairReward goal planner.
+  const reward: number | null =
+    isMilestoneOrLongForm ? null : calculatedReward;
+
   const rewardMode: FairRewardActivity["rewardMode"] =
     calculatedReward != null ? "fairreward_estimate" : "unavailable";
 
-  const rewardLabel =
-    calculatedReward != null
-      ? `€ ${calculatedReward.toFixed(2)}`
+  const rewardLabel = isMilestoneOrLongForm
+    ? calculatedReward != null
+      ? `Fino a € ${calculatedReward.toFixed(2)}`
+      : "Ricompensa variabile"
+    : calculatedReward != null
+      ? `≈ € ${calculatedReward.toFixed(2)}`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
@@ -278,9 +290,13 @@ export function normalizeAyeTOffer(
     },
 
     timing: {
-      activityDurationSeconds: providerConversionSeconds,
+      // For long-form/CPE campaigns the provider conversion_time is not
+      // comparable with a single-task "about N minutes" filter.
+      activityDurationSeconds: isMilestoneOrLongForm
+        ? null
+        : providerConversionSeconds,
       activityDurationSource:
-        providerConversionSeconds != null
+        !isMilestoneOrLongForm && providerConversionSeconds != null
           ? "provider_conversion"
           : "unknown",
       providerConversionSeconds,

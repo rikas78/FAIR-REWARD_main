@@ -335,13 +335,33 @@ export default function Home() {
     );
 
     if (appliedTime != null) {
-      const maxMinutes = Number(appliedTime);
+      const targetSeconds = Number(appliedTime) * 60;
 
-      candidates = candidates.filter((activity) => {
-        const seconds = activity.timing.activityDurationSeconds;
+      // "5 minuti" means approximately 5 minutes, not "anything below
+      // 5 minutes". Prefer activities close to the requested duration.
+      // A ±50% window keeps the result useful while adapting to the
+      // inventory that ayeT makes available on that day.
+      const toleranceSeconds = Math.max(120, targetSeconds * 0.5);
 
-        return seconds != null && seconds <= maxMinutes * 60;
-      });
+      candidates = candidates
+        .filter((activity) => {
+          const seconds = activity.timing.activityDurationSeconds;
+
+          if (seconds == null || activity.timing.isMilestoneOrLongForm) {
+            return false;
+          }
+
+          return Math.abs(seconds - targetSeconds) <= toleranceSeconds;
+        })
+        .sort((a, b) => {
+          const aSeconds = a.timing.activityDurationSeconds ?? Infinity;
+          const bSeconds = b.timing.activityDurationSeconds ?? Infinity;
+
+          return (
+            Math.abs(aSeconds - targetSeconds) -
+            Math.abs(bSeconds - targetSeconds)
+          );
+        });
     }
 
     const rewarded = candidates
@@ -349,7 +369,19 @@ export default function Home() {
         (activity) =>
           activity.reward != null && activity.reward > 0,
       )
-      .sort((a, b) => (b.reward ?? 0) - (a.reward ?? 0))
+      .sort((a, b) => {
+        const aReward = a.reward ?? 0;
+        const bReward = b.reward ?? 0;
+
+        if (appliedGoal == null) {
+          return bReward - aReward;
+        }
+
+        return (
+          Math.abs(aReward - Number(appliedGoal)) -
+          Math.abs(bReward - Number(appliedGoal))
+        );
+      })
       .slice(0, 20);
 
     if (appliedGoal == null || rewarded.length === 0) {
@@ -786,13 +818,15 @@ export default function Home() {
               INVENTARIO
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
-              {appliedGoal != null
-                ? `Percorso per circa € ${appliedGoal}`
-                : appliedTime != null
-                  ? `Attività entro ${appliedTime} min`
-                  : appliedFilter !== "Tutte"
-                    ? `Attività: ${appliedFilter}`
-                    : "Tutte le attività"}
+              {appliedGoal != null && appliedTime != null
+                ? `Percorso per circa € ${appliedGoal} · circa ${appliedTime} min`
+                : appliedGoal != null
+                  ? `Percorso per circa € ${appliedGoal}`
+                  : appliedTime != null
+                    ? `Attività per circa ${appliedTime} min`
+                    : appliedFilter !== "Tutte"
+                      ? `Attività: ${appliedFilter}`
+                      : "Tutte le attività"}
             </h2>
           </div>
 
@@ -888,13 +922,15 @@ export default function Home() {
                       </div>
 
                       <div className="mt-4 text-xs text-white/45">
-                        {providerWindow != null
-                          ? `Tempo indicativo provider: ${Math.round(
-                              providerWindow / 60,
-                            ) < 60
-                            ? `${Math.round(providerWindow / 60)} min`
-                            : `${Math.round(providerWindow / 3600)} h`}`
-                          : "Tempistica provider non specificata"}
+                        {item.timing.isMilestoneOrLongForm
+                          ? "Percorso a più obiettivi · durata variabile"
+                          : providerWindow != null
+                            ? `Tempo indicativo: ${Math.round(
+                                providerWindow / 60,
+                              ) < 60
+                              ? `${Math.round(providerWindow / 60)} min`
+                              : `${Math.round(providerWindow / 3600)} h`}`
+                            : "Tempistica non specificata"}
                       </div>
                     </div>
 
@@ -905,9 +941,10 @@ export default function Home() {
                         </div>
 
                         {item.rewardMode === "fairreward_estimate" && (
-                          <div className="mt-1 max-w-[240px] text-[10px] leading-4 text-white/40">
-                            Ricompensa calcolata secondo le impostazioni
-                            economiche FairReward.
+                          <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-white/40">
+                            {item.timing.isMilestoneOrLongForm
+                              ? "Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi."
+                              : "Stima FairReward basata sul payout del provider."}
                           </div>
                         )}
 
@@ -1061,13 +1098,15 @@ export default function Home() {
                         Tipo: {selectedActivity.conversionType}
                       </div>
                       <div className="mt-1 text-sm text-white/55">
-                        {providerWindow != null
-                          ? `Tempo indicativo provider: ${Math.round(
-                              providerWindow / 60,
-                            ) < 60
-                            ? `${Math.round(providerWindow / 60)} min`
-                            : `${Math.round(providerWindow / 3600)} h`}`
-                          : "Tempistica non specificata"}
+                        {selectedActivity.timing.isMilestoneOrLongForm
+                          ? "Percorso a più obiettivi · durata variabile"
+                          : providerWindow != null
+                            ? `Tempo indicativo: ${Math.round(
+                                providerWindow / 60,
+                              ) < 60
+                              ? `${Math.round(providerWindow / 60)} min`
+                              : `${Math.round(providerWindow / 3600)} h`}`
+                            : "Tempistica non specificata"}
                       </div>
                       {providerMaxWindow != null && (
                         <div className="mt-1 text-xs text-white/40">
