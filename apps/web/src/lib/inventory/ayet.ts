@@ -151,58 +151,27 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // ayeT exposes standard offer payouts in payout_usd.
-  // Live CPE offers can instead expose the campaign payout in payout/payout_base
-  // together with cpe_total_rewards_currency_name (for example "euro").
-  // currency_amount is the offerwall virtual currency and must NOT be
-  // interpreted as EUR.
+  // ayeT economics:
+  // payout_usd = payout reale del publisher/network in USD.
+  // currency_amount = valuta virtuale del placement assegnata all'utente.
+  // offer.payout / payout_base NON devono essere interpretati come EUR.
   const providerPayoutUsd = asNumber(offer.payout_usd);
-  const providerPayoutFallback = asNumber(offer.payout);
+  const userCurrencyAmount = asNumber(offer.currency_amount);
 
-  const payoutCurrency = asString(
-    offer.cpe_total_rewards_currency_name ?? offer.currency ?? "",
-  ).toLowerCase();
-
-  const providerPayout =
-    providerPayoutUsd ?? providerPayoutFallback;
-
-  const providerPayoutIsEur =
-    providerPayoutUsd == null &&
-    (payoutCurrency === "euro" || payoutCurrency === "eur");
-
-  // FairReward preview economics:
-  // 25% provider/network costs.
-  // User receives 50% of the remaining 75%.
-  // Effective user share = 37.5% of provider payout.
-  const expensePercent = 25;
-  const userSharePercent = 50;
-  const fairRewardSharePercent =
-    (100 - expensePercent) * (userSharePercent / 100);
-
-  // ECB reference rate fallback for the live technical preview.
-  // Configurable later through NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE.
-  // ECB 6 Oct 2026: 1 EUR = 1.1269 USD.
-  const configuredUsdPerEur = Number(
-    process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
+  const userCurrencyIdentifier = asString(
+    offer.currency_identifier ??
+      offer.currency ??
+      offer.cpe_total_rewards_currency_name ??
+      "",
   );
-  const usdPerEur =
-    Number.isFinite(configuredUsdPerEur) && configuredUsdPerEur > 0
-      ? configuredUsdPerEur
-      : 1.1269;
 
-  const usdToEur = 1 / usdPerEur;
+  const currencyConversionRate =
+    asNumber(offer.currency_conversion_rate) ?? null;
 
-  const providerPayoutEur =
-    providerPayout != null
-      ? providerPayoutIsEur
-        ? providerPayout
-        : providerPayout * usdToEur
-      : null;
-
+  // Il valore mostrato nella card è quello della valuta del placement.
   const calculatedReward =
-    providerPayoutEur != null
-      ? Math.round(providerPayoutEur * (fairRewardSharePercent / 100) * 100) /
-        100
+    userCurrencyAmount != null && Number.isFinite(userCurrencyAmount)
+      ? Math.round(userCurrencyAmount * 100) / 100
       : null;
 
   const category = detectCategory(offer);
@@ -232,14 +201,14 @@ export function normalizeAyeTOffer(
   const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
-    calculatedReward != null ? "fairreward_estimate" : "unavailable";
+    calculatedReward != null ? "provider" : "unavailable";
 
   const rewardLabel = isMilestoneOrLongForm
     ? calculatedReward != null
-      ? `Fino a € ${calculatedReward.toFixed(2)}`
+      ? `Fino a ${calculatedReward.toFixed(2)} ${userCurrencyIdentifier || "punti"}`
       : "Ricompensa variabile"
     : calculatedReward != null
-      ? `≈ € ${calculatedReward.toFixed(2)}`
+      ? `${calculatedReward.toFixed(2)} ${userCurrencyIdentifier || "punti"}`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
@@ -301,10 +270,10 @@ export function normalizeAyeTOffer(
     rewardLabel,
 
     economics: {
-      providerPayout,
-      expensePercent,
-      userSharePercent,
-      fairRewardSharePercent,
+      providerPayout: providerPayoutUsd,
+      expensePercent: 0,
+      userSharePercent: 0,
+      fairRewardSharePercent: 0,
     },
 
     timing: {
