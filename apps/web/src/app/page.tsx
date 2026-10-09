@@ -742,7 +742,7 @@ export default function Home() {
                     onClick={() => setMenuOpen(false)}
                     className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm font-bold text-white/80"
                   >
-                    {item}
+                    {t(item)}
                   </button>
                 ),
               )}
@@ -895,7 +895,7 @@ export default function Home() {
                 }}
                 className="rounded-xl border border-white/10 px-4 py-3 text-xs font-black text-white/60 hover:bg-white/[0.06]"
               >
-                RESET FILTRI
+                {t("RESET FILTRI")}
               </button>
 
               <button
@@ -906,7 +906,7 @@ export default function Home() {
                 }}
                 className="rounded-xl bg-white px-5 py-3 text-xs font-black text-black hover:bg-white/90"
               >
-                APPLICA FILTRI
+                {t("APPLICA FILTRI")}
               </button>
             </div>
           </div>
@@ -938,7 +938,7 @@ export default function Home() {
         <div className="mb-5 flex items-end justify-between">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300/60">
-              INVENTARIO
+              {t("INVENTARIO")}
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
               {appliedGoal != null && appliedTime != null
@@ -963,10 +963,10 @@ export default function Home() {
         {loadingOffers && (
           <div className="rounded-3xl border border-cyan-400/20 bg-[#06132b] p-8 text-center">
             <div className="text-sm font-black">
-              Caricamento offerte ayeT…
+              {t("Caricamento offerte ayeT…")}
             </div>
             <div className="mt-2 text-xs text-white/45">
-              Stiamo leggendo l&apos;inventory reale.
+              {t("Stiamo leggendo l'inventory reale.")}
             </div>
           </div>
         )}
@@ -974,7 +974,7 @@ export default function Home() {
         {!loadingOffers && offerError && (
           <div className="rounded-3xl border border-orange-400/30 bg-[#06132b] p-8">
             <div className="text-sm font-black text-orange-300">
-              Errore collegamento ayeT
+              {t("Errore collegamento ayeT")}
             </div>
             <div className="mt-2 text-xs leading-5 text-white/45">
               {offerError}
@@ -985,11 +985,10 @@ export default function Home() {
         {!loadingOffers && !offerError && visible.length === 0 && (
           <div className="rounded-3xl border border-white/10 bg-[#06132b] p-8 text-center">
             <div className="text-sm font-black">
-              Nessuna offerta disponibile in questo momento.
+              {t("Nessuna offerta disponibile in questo momento.")}
             </div>
             <div className="mt-2 text-xs text-white/45">
-              Il collegamento ayeT risponde correttamente, ma l&apos;inventory
-              per questo contesto è vuota.
+              {t("Il collegamento ayeT risponde correttamente, ma l'inventory per questo contesto è vuota.")}
             </div>
           </div>
         )}
@@ -1027,11 +1026,11 @@ export default function Home() {
                         <div
                           className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
                         >
-                          {item.category.toUpperCase()}
+                          {t(item.category).toUpperCase()}
                         </div>
 
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
-                          {item.requirements.paymentRequired ? "A PAGAMENTO" : "GRATUITA"}
+                          {item.requirements.paymentRequired ? t("A PAGAMENTO") : t("GRATUITA")}
                         </div>
                       </div>
 
@@ -1071,7 +1070,7 @@ export default function Home() {
                     <div className="mt-5 flex items-end justify-between gap-4">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
-                          RICOMPENSA
+                          {t("RICOMPENSA")}
                         </div>
                         <div className={`mt-1 text-2xl font-black ${style.reward}`}>
                           {item.rewardLabel}
@@ -1099,7 +1098,7 @@ export default function Home() {
                           onClick={() => setSelectedActivity(item)}
                           className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-xs font-black text-white/80"
                         >
-                          DETTAGLI
+                          {t("DETTAGLI")}
                         </button>
 
                         <button
@@ -1113,8 +1112,8 @@ export default function Home() {
                           }`}
                         >
                           {launchingOffer === item.id
-                            ? "APERTURA…"
-                            : "INIZIA"}
+                            ? t("APERTURA…")
+                            : t("INIZIA")}
                         </button>
                       </div>
                     </div>
@@ -1149,7 +1148,7 @@ export default function Home() {
                       <div
                         className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
                       >
-                        {selectedActivity.category.toUpperCase()}
+                        {t(selectedActivity.category).toUpperCase()}
                       </div>
                       <h2 className="mt-3 text-2xl font-black sm:text-3xl">
                         {selectedActivity.title}
@@ -1218,12 +1217,12 @@ export default function Home() {
 
                     <div className="rounded-2xl border border-cyan-400/15 bg-white/[0.03] p-4">
                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300/70">
-                        PAGAMENTO
+                        {t("PAGAMENTO")}
                       </div>
                       <div className="mt-1 text-lg font-black">
                         {selectedActivity.requirements.paymentRequired
-                          ? "Richiesto dal partner"
-                          : "Nessun pagamento"}
+                          ? t("Richiesto dal partner")
+                          : t("Nessun pagamento")}
                       </div>
                     </div>
                   </div>
@@ -1231,7 +1230,7 @@ export default function Home() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
-                        DISPONIBILE SU
+                        {t("DISPONIBILE SU")}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {selectedActivity.requirements.platforms.length ||
@@ -1259,7 +1258,7 @@ export default function Home() {
 
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
-                        CONVERSIONE
+                        {t("CONVERSIONE")}
                       </div>
                       <div className="mt-2 text-sm font-bold text-white/80">
                         Tipo: {selectedActivity.conversionType}
@@ -1301,7 +1300,7 @@ export default function Home() {
 
                   <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
-                      COSA DEVI FARE
+                      {t("COSA DEVI FARE")}
                     </div>
                     <div className="mt-2 text-sm leading-6 text-white/70">
                       {selectedActivity.instructions ||
@@ -1330,7 +1329,7 @@ export default function Home() {
                       onClick={() => setSelectedActivity(null)}
                       className="rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-xs font-black text-white/70"
                     >
-                      CHIUDI
+                      {t("CHIUDI")}
                     </button>
 
                     <button
@@ -1342,7 +1341,7 @@ export default function Home() {
                           : "cursor-not-allowed bg-white/15 text-white/40"
                       }`}
                     >
-                      INIZIA ATTIVITÀ
+                      {t("INIZIA ATTIVITÀ")}
                     </button>
                   </div>
                 </>
@@ -1367,7 +1366,7 @@ export default function Home() {
               }`}
             >
               <span className="text-lg">{icon}</span>
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
