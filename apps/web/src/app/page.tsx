@@ -867,16 +867,15 @@ export default function Home() {
             <div>
               <div className="text-sm font-bold text-white/70">
                 {pendingFilterChanges
-                  ? "Hai modifiche ai filtri tempo/guadagno non ancora applicate."
+                  ? t("Hai modifiche ai filtri tempo/guadagno non ancora applicate.")
                   : filtersApplied
-                    ? "✓ Filtri tempo/guadagno applicati"
-                    : "Le categorie si aggiornano subito. Usa i filtri solo per tempo e guadagno."}
+                    ? t("✓ Filtri tempo/guadagno applicati")
+                    : t("Le categorie si aggiornano subito. Usa i filtri solo per tempo e guadagno.")}
               </div>
 
               {filtersApplied && rewardConfiguredCount === 0 && (
                 <div className="mt-2 text-xs leading-5 text-amber-100/70">
-                  Nessuna ricompensa calcolabile per le offerte attualmente
-                  disponibili.
+                  {t("Nessuna ricompensa calcolabile per le offerte attualmente disponibili.")}
                 </div>
               )}
             </div>
@@ -942,7 +941,7 @@ export default function Home() {
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
               {appliedGoal != null && appliedTime != null
-                ? `Plan for about € ${appliedGoal} · about ${appliedTime} min`
+                ? `${t("Percorso per circa € ")}${appliedGoal} · ${appliedTime} min`
                 : appliedGoal != null
                   ? `${t("Attività per circa € ")}${appliedGoal}`
                   : appliedTime != null
@@ -1055,14 +1054,14 @@ export default function Home() {
 
                       <div className="mt-4 text-xs text-white/45">
                         {item.timing.isMilestoneOrLongForm
-                          ? "Percorso a più obiettivi · durata variabile"
+                          ? t("Percorso a più obiettivi · durata variabile")
                           : providerWindow != null
-                            ? `Tempo indicativo: ${Math.round(
+                            ? `${t("Tempo indicativo: ")}${Math.round(
                                 providerWindow / 60,
                               ) < 60
                               ? `${Math.round(providerWindow / 60)} min`
                               : `${Math.round(providerWindow / 3600)} h`}`
-                            : "Tempistica non specificata"}
+                            : t("Tempistica non specificata")}
                       </div>
                     </div>
                     </div>
@@ -1079,15 +1078,14 @@ export default function Home() {
                         {item.rewardMode === "fairreward_estimate" && (
                           <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-white/40">
                             {item.timing.isMilestoneOrLongForm
-                              ? "Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi."
-                              : "Stima FairReward basata sul payout del provider."}
+                              ? t("Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi.")
+                              : t("Stima FairReward basata sul payout del provider.")}
                           </div>
                         )}
 
                         {item.rewardMode === "unavailable" && (
                           <div className="mt-1 max-w-[240px] text-[10px] leading-4 text-orange-300/75">
-                            Ricompensa non ancora configurata per questa
-                            integrazione.
+                            {t("Ricompensa non ancora configurata per questa integrazione.")}
                           </div>
                         )}
                       </div>
