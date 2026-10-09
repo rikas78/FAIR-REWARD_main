@@ -575,7 +575,7 @@ export default function Home() {
               FAIR<span className="text-fuchsia-500">REWARD</span>
             </div>
             <div className="text-[9px] uppercase tracking-[0.26em] text-white/50">
-              Il tuo tempo ha valore
+              {t("Il tuo tempo ha valore")}
             </div>
           </div>
 
@@ -606,7 +606,7 @@ export default function Home() {
                       : "border-cyan-400/15 bg-white/[0.025] text-white/75"
                   }`}
                 >
-                  {item}
+                  {t(item)}
                 </button>
               ),
             )}
@@ -671,7 +671,7 @@ export default function Home() {
                 <input
                   value={loginEmail}
                   onChange={(event) => setLoginEmail(event.target.value)}
-                  placeholder="Email"
+                  placeholder={language === "en" ? "Email" : "Email"}
                   type="email"
                   autoComplete="email"
                   className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
@@ -680,7 +680,7 @@ export default function Home() {
                 <input
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="Password"
+                  placeholder={language === "en" ? "Password" : "Password"}
                   type="password"
                   autoComplete="current-password"
                   className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
