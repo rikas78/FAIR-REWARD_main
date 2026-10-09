@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase/browser";
 import type { FairRewardActivity } from "@/lib/inventory/ayet";
 
 type Filter =
+
   | "Tutte"
   | "Sondaggi"
   | "App"
@@ -136,6 +137,95 @@ function normalizeArray(value: unknown) {
 }
 
 export default function Home() {
+  const [language, setLanguage] = useState<"it" | "en">("it");
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("fairreward-language");
+    if (saved === "it" || saved === "en") setLanguage(saved);
+  }, []);
+
+  function changeLanguage(next: "it" | "en") {
+    setLanguage(next);
+    window.localStorage.setItem("fairreward-language", next);
+  }
+
+  const translations: Record<string, string> = {
+    "Il tuo tempo ha valore": "Your time has value",
+    "ACCEDI": "LOG IN",
+    "Home": "Home",
+    "Attività": "Tasks",
+    "Play": "Play",
+    "Planner": "Planner",
+    "Wallet": "Wallet",
+    "Profilo": "Profile",
+    "Le mie attività": "My tasks",
+    "Calendario": "Calendar",
+    "Impostazioni": "Settings",
+    "Account FairReward": "FairReward account",
+    "Accedi": "Log in",
+    "SALDO DISPONIBILE": "AVAILABLE BALANCE",
+    "ESCI": "LOG OUT",
+    "ACCESSO…": "LOGGING IN…",
+    "Tutte": "All",
+    "Sondaggi": "Surveys",
+    "Micro-task": "Micro-tasks",
+    "Giochi": "Games",
+    "APPLICA FILTRI": "APPLY FILTERS",
+    "INVENTARIO": "INVENTORY",
+    "Tutte le attività": "All tasks",
+    "Caricamento offerte ayeT…": "Loading ayeT offers…",
+    "Stiamo leggendo l'inventory reale.": "Loading the live offer inventory.",
+    "Errore collegamento ayeT": "ayeT connection error",
+    "Nessuna offerta disponibile in questo momento.": "No offers available right now.",
+    "Il collegamento ayeT risponde correttamente, ma l'inventory per questo contesto è vuota.": "The ayeT connection is responding, but there are no offers for this context.",
+    "attività trovata": "task found",
+    "attività trovate": "tasks found",
+    "A PAGAMENTO": "PAID",
+    "GRATUITA": "FREE",
+    "Percorso a più obiettivi · durata variabile": "Multi-step campaign · variable duration",
+    "Tempistica non specificata": "Timing not specified",
+    "Tempo indicativo: ": "Estimated time: ",
+    "RICOMPENSA": "REWARD",
+    "Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi.": "Potential campaign value; rewards are earned by completing multiple milestones.",
+    "Stima FairReward basata sul payout del provider.": "FairReward estimate based on the provider payout.",
+    "Ricompensa non ancora configurata per questa integrazione.": "Reward not yet configured for this integration.",
+    "DETTAGLI": "DETAILS",
+    "APERTURA…": "OPENING…",
+    "INIZIA": "START",
+    "Chiudi": "Close",
+    "PAGAMENTO": "PAYMENT",
+    "Richiesto dal partner": "Required by partner",
+    "Nessun pagamento": "No payment required",
+    "DISPONIBILE SU": "AVAILABLE ON",
+    "Non specificato": "Not specified",
+    "CONVERSIONE": "CONVERSION",
+    "Tipo: ": "Type: ",
+    "Finestra massima provider:": "Provider maximum window:",
+    "ECONOMIA FAIRREWARD": "FAIRREWARD ECONOMICS",
+    "Costi provider: ": "Provider costs: ",
+    "quota utente sul netto:": "user share of net revenue:",
+    "quota utente sul lordo:": "user share of gross payout:",
+    "COSA DEVI FARE": "WHAT YOU NEED TO DO",
+    "Le istruzioni dettagliate saranno fornite dal partner.": "Detailed instructions will be provided by the partner.",
+    "Richiede prenotazione": "Reservation required",
+    "Nessuna prenotazione indicata": "No reservation indicated",
+    "A pagamento": "Paid",
+    "Gratuita": "Free",
+    "CHIUDI": "CLOSE",
+    "INIZIA ATTIVITÀ": "START TASK",
+    "Errore durante il caricamento ayeT": "Error loading ayeT",
+    "Errore durante il caricamento delle offerte": "Error loading offers",
+    "Ricompensa non disponibile.": "Reward unavailable.",
+    "Ricompensa non disponibile": "Reward unavailable",
+    "Attività per circa € ": "Tasks for about € ",
+    "Attività per circa ": "Tasks for about ",
+    "Percorso per circa € ": "Plan for about € ",
+    "Attività: ": "Tasks: "
+  };
+
+  const t = (value: string) =>
+    language === "en" ? (translations[value] ?? value) : value;
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("Tutte");
   const [time, setTime] = useState("10");
@@ -489,13 +579,19 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-cyan-400/20 bg-white/[0.04] p-1 text-[11px] font-black" aria-label="Language">
+            <button type="button" onClick={() => changeLanguage("it")} aria-pressed={language === "it"} className={`rounded-md px-2 py-1 ${language === "it" ? "bg-fuchsia-500 text-white" : "text-white/60"}`}>IT</button>
+            <button type="button" onClick={() => changeLanguage("en")} aria-pressed={language === "en"} className={`rounded-md px-2 py-1 ${language === "en" ? "bg-fuchsia-500 text-white" : "text-white/60"}`}>EN</button>
+          </div>
           <button
             type="button"
             onClick={() => setShowLogin(true)}
             className="rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-2 text-sm font-black"
           >
-            {authEmail ? walletLabel : "ACCEDI"}
+            {authEmail ? walletLabel : t("ACCEDI")}
           </button>
+          </div>
         </div>
 
         <div className="border-t border-cyan-400/10 bg-[#031029]">
@@ -503,7 +599,7 @@ export default function Home() {
             {["Home", "Attività", "Play", "Planner", "Wallet"].map(
               (item, index) => (
                 <button
-                  key={item}
+                  key={t(item)}
                   className={`shrink-0 rounded-xl border px-5 py-2.5 text-sm font-bold ${
                     index === 0
                       ? "border-fuchsia-400 bg-fuchsia-500"
@@ -533,7 +629,7 @@ export default function Home() {
                   ACCOUNT FAIRREWARD
                 </div>
                 <h2 className="mt-2 text-2xl font-black">
-                  {authEmail ? "Wallet" : "Accedi"}
+                  {authEmail ? t("Wallet") : t("Accedi")}
                 </h2>
               </div>
 
@@ -602,7 +698,7 @@ export default function Home() {
                   onClick={login}
                   className="mt-4 w-full rounded-xl bg-fuchsia-500 px-5 py-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {authBusy ? "ACCESSO…" : "ACCEDI"}
+                  {authBusy ? t("ACCESSO…") : t("ACCEDI")}
                 </button>
               </div>
             )}
@@ -810,7 +906,7 @@ export default function Home() {
                   : "border-cyan-400/15 bg-[#06132b] text-white/70"
               }`}
             >
-              {item}
+              {t(item)}
             </button>
           ))}
         </div>
@@ -827,13 +923,13 @@ export default function Home() {
             </div>
             <h2 className="mt-1 text-2xl font-black sm:text-3xl">
               {appliedGoal != null && appliedTime != null
-                ? `Percorso per circa € ${appliedGoal} · circa ${appliedTime} min`
+                ? `Plan for about € ${appliedGoal} · about ${appliedTime} min`
                 : appliedGoal != null
-                  ? `Attività per circa € ${appliedGoal}`
+                  ? `${t("Attività per circa € ")}${appliedGoal}`
                   : appliedTime != null
-                    ? `Attività per circa ${appliedTime} min`
+                    ? `${t("Attività per circa ")}${appliedTime} min`
                     : filter !== "Tutte"
-                      ? `Attività: ${filter}`
+                      ? `Attività: ${t(filter)}`
                       : "Tutte le attività"}
             </h2>
           </div>
@@ -841,9 +937,7 @@ export default function Home() {
           <span className="text-xs text-white/40">
             {loadingOffers
               ? "…"
-              : `${visible.length} ${
-                  visible.length === 1 ? "attività trovata" : "attività trovate"
-                }`}
+              : `${visible.length} ${t(visible.length === 1 ? "attività trovata" : "attività trovate")}`}
           </span>
         </div>
 
