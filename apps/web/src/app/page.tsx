@@ -136,6 +136,16 @@ function normalizeArray(value: unknown) {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function safeMediaUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<"it" | "en">("it");
 
@@ -220,7 +230,16 @@ export default function Home() {
     "Attività per circa € ": "Tasks for about € ",
     "Attività per circa ": "Tasks for about ",
     "Percorso per circa € ": "Plan for about € ",
-    "Attività: ": "Tasks: "
+    "Attività: ": "Tasks: ",
+    "GALLERIA": "GALLERY",
+    "VEDI VIDEO": "WATCH VIDEO",
+    "Nessuna immagine disponibile": "No image available",
+    "RESET FILTRI": "RESET FILTERS",
+    "Hai modifiche ai filtri tempo/guadagno non ancora applicate.": "You have unapplied time/reward filter changes.",
+    "✓ Filtri tempo/guadagno applicati": "✓ Time/reward filters applied",
+    "Le categorie si aggiornano subito. Usa i filtri solo per tempo e guadagno.": "Categories update instantly. Use filters for time and reward.",
+    "Nessuna ricompensa calcolabile per le offerte attualmente disponibili.": "No reward can currently be calculated for available offers.",
+    "Fino a € ": "Up to € ",
   };
 
   const t = (value: string) =>
@@ -990,8 +1009,20 @@ export default function Home() {
                     className={`absolute inset-0 bg-gradient-to-br ${style.glow} via-transparent to-transparent opacity-70`}
                   />
 
-                  <div className="relative flex min-h-[250px] flex-col justify-between p-5">
-                    <div>
+                  <div className="relative flex min-h-[250px] flex-col justify-between p-4 sm:p-5">
+                    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 sm:grid-cols-[124px_minmax(0,1fr)]">
+                      <div className="relative h-[112px] overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-fuchsia-500/20 via-[#0b1d3e] to-cyan-400/15 sm:h-[140px]">
+                        {safeMediaUrl(item.media?.iconLarge || item.media?.icon) ? (
+                          <img src={safeMediaUrl(item.media?.iconLarge || item.media?.icon) ?? undefined} alt={item.title} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full flex-col items-center justify-center gap-2 p-2 text-center">
+                            <span className="text-3xl">{item.category === "Giochi" ? "🎮" : item.category === "Sondaggi" ? "📊" : item.category === "Video" ? "▶" : item.category === "Shopping" ? "🛍️" : item.category === "App" ? "📱" : "⚡"}</span>
+                            <span className="text-[9px] font-black uppercase tracking-[0.12em] text-white/45">FAIRREWARD</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[#020a1d]/80 to-transparent" />
+                      </div>
+                      <div className="min-w-0">
                       <div className="flex flex-wrap gap-2">
                         <div
                           className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black ${style.badge}`}
@@ -1034,6 +1065,7 @@ export default function Home() {
                               : `${Math.round(providerWindow / 3600)} h`}`
                             : "Tempistica non specificata"}
                       </div>
+                    </div>
                     </div>
 
                     <div className="mt-5 flex items-end justify-between gap-4">
@@ -1136,6 +1168,36 @@ export default function Home() {
                   <p className="mt-4 text-sm leading-6 text-white/70">
                     {selectedActivity.description}
                   </p>
+
+                  {(() => {
+                    const mediaUrls = [
+                      safeMediaUrl(selectedActivity.media?.iconLarge || selectedActivity.media?.icon),
+                      ...(selectedActivity.media?.screenshots ?? []).map((url) => safeMediaUrl(url)),
+                    ].filter((url): url is string => Boolean(url));
+                    const videoUrl = safeMediaUrl(selectedActivity.media?.videoUrl);
+                    const uniqueMediaUrls = [...new Set(mediaUrls)].slice(0, 5);
+                    return (
+                      <>
+                        {uniqueMediaUrls.length > 0 ? (
+                          <div className="mt-5">
+                            <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300/70">{t("GALLERIA")}</div>
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                              {uniqueMediaUrls.map((url, index) => (
+                                <a key={url} href={url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+                                  <img src={url} alt={selectedActivity.title + " " + (index + 1)} loading="lazy" referrerPolicy="no-referrer" className="aspect-square h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2 text-xs text-white/40">{t("Nessuna immagine disponibile")}</div>
+                        )}
+                        {videoUrl && (
+                          <a href={videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-black text-cyan-100 hover:bg-cyan-300/15">{t("VEDI VIDEO")} ↗</a>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-fuchsia-400/15 bg-white/[0.03] p-4">
