@@ -120,7 +120,7 @@ async function handleCallback(request: NextRequest) {
     process.env.AYET_CURRENCY_IDENTIFIER ??
     "";
   const metadata = Object.fromEntries(params.entries());
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
 
   const { error: conversionError } = await supabase
     .from("ayet_conversions")
