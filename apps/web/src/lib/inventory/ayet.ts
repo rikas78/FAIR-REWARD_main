@@ -157,6 +157,10 @@ export function normalizeAyeTOffer(
   // FairReward mostra un guadagno stimato in EUR sulla base del payout
   // reale del provider e dell'economia FairReward.
   const providerPayoutUsd = asNumber(offer.payout_usd);
+  // The live Offerwall API can expose only payout/payout_name for some
+  // campaign types. Those values may be in the adslot's virtual currency,
+  // so never convert them to EUR without an explicit USD payout.
+  const providerPayoutName = cleanText(offer.payout_name);
 
   const configuredUsdPerEur = Number(
     process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
@@ -212,12 +216,12 @@ export function normalizeAyeTOffer(
   const rewardMode: FairRewardActivity["rewardMode"] =
     calculatedReward != null ? "fairreward_estimate" : "unavailable";
 
-  const rewardLabel = isMilestoneOrLongForm
-    ? calculatedReward != null
+  const rewardLabel = calculatedReward != null
+    ? isMilestoneOrLongForm
       ? `Fino a € ${calculatedReward.toFixed(2)}`
-      : "Ricompensa non disponibile"
-    : calculatedReward != null
-      ? `≈ € ${calculatedReward.toFixed(2)}`
+      : `≈ € ${calculatedReward.toFixed(2)}`
+    : providerPayoutName
+      ? `ayeT: ${providerPayoutName} (valuta del partner)`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
