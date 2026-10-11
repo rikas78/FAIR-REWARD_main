@@ -56,9 +56,11 @@ async function handleCallback(request: NextRequest) {
   }
 
   const callbackType = (params.get("callback_type") ?? "").trim().toLowerCase();
-  const isChargeback =
-    callbackType === "chargeback" ||
-    params.get("is_chargeback") === "1";
+  const eventHint = (
+    params.get("status") ??
+    params.get("event") ??
+    ""
+  ).trim().toLowerCase();
 
   const payoutUsd = finiteParam(params, "payout_usd");
   const currencyAmount = finiteParam(params, "currency_amount");
@@ -69,6 +71,14 @@ async function handleCallback(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const isChargeback =
+    callbackType === "chargeback" ||
+    params.get("is_chargeback") === "1" ||
+    eventHint === "chargeback" ||
+    eventHint === "reversal" ||
+    payoutUsd < 0 ||
+    currencyAmount < 0;
 
   const apiKey = process.env.AYET_API_KEY;
   const signature =
