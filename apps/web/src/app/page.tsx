@@ -1285,14 +1285,12 @@ export default function Home() {
 
                   <div className="mt-4 rounded-2xl border border-fuchsia-400/10 bg-fuchsia-400/[0.02] p-4">
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-fuchsia-300/60">
-                      ECONOMIA FAIRREWARD
+                      RICOMPENSA AYE T
                     </div>
                     <div className="mt-2 text-sm leading-6 text-white/65">
-                      Costi provider: {selectedActivity.economics.expensePercent}% ·
-                      quota utente sul netto:{" "}
-                      {selectedActivity.economics.userSharePercent}% ·
-                      quota utente sul lordo:{" "}
-                      {selectedActivity.economics.fairRewardSharePercent.toFixed(1)}%
+                      Importo indicato da ayeT per questo AdSlot. Le ricompense CPE
+                      possono essere suddivise in tappe e sono soggette alla
+                      validazione del partner.
                     </div>
                   </div>
 
