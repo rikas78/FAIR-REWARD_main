@@ -221,7 +221,7 @@ export function normalizeAyeTOffer(
       : "",
   ]
     .filter(Boolean)
-    .join("\\n");
+    .join("\n");
 
   const description = cleanText(
     offer.description ??
