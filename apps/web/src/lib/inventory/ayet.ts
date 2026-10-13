@@ -27,10 +27,8 @@ export type FairRewardActivity = {
   rewardLabel: string;
 
   economics: {
+    /** Publisher earnings in USD, available in callback data (not Offerwall API). */
     providerPayout: number | null;
-    expensePercent: number;
-    userSharePercent: number;
-    fairRewardSharePercent: number;
   };
 
   timing: {
@@ -151,40 +149,15 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // ayeT economics:
-  // payout_usd = payout reale della conversione/campagna in USD.
-  // currency_amount = valuta virtuale del placement: NON è EUR.
-  // FairReward mostra un guadagno stimato in EUR sulla base del payout
-  // reale del provider e dell'economia FairReward.
+  // James confirmed that Offerwall API payout is the user-facing reward,
+  // configured in EUR for this ad slot. payout_usd is publisher earnings
+  // and is not exposed by the Offerwall API; currency_amount is callback-only.
+  const providerReward = asNumber(offer.payout);
   const providerPayoutUsd = asNumber(offer.payout_usd);
-  // The live Offerwall API can expose only payout/payout_name for some
-  // campaign types. Those values may be in the adslot's virtual currency,
-  // so never convert them to EUR without an explicit USD payout.
   const providerPayoutName = cleanText(offer.payout_name);
-
-  const configuredUsdPerEur = Number(
-    process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
-  );
-  const usdPerEur =
-    Number.isFinite(configuredUsdPerEur) && configuredUsdPerEur > 0
-      ? configuredUsdPerEur
-      : 1.1269;
-
-  const expensePercent = 25;
-  const userSharePercent = 50;
-  const fairRewardSharePercent =
-    (100 - expensePercent) * (userSharePercent / 100);
-
-  const providerPayoutEur =
-    providerPayoutUsd != null
-      ? providerPayoutUsd / usdPerEur
-      : null;
-
   const calculatedReward =
-    providerPayoutEur != null
-      ? Math.round(
-          providerPayoutEur * (fairRewardSharePercent / 100) * 100,
-        ) / 100
+    providerReward != null && providerReward > 0
+      ? Math.round(providerReward * 100) / 100
       : null;
 
   const category = detectCategory(offer);
@@ -214,14 +187,14 @@ export function normalizeAyeTOffer(
   const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
-    calculatedReward != null ? "fairreward_estimate" : "unavailable";
+    calculatedReward != null ? "provider" : "unavailable";
 
   const rewardLabel = calculatedReward != null
     ? isMilestoneOrLongForm
       ? `Fino a € ${calculatedReward.toFixed(2)}`
-      : `≈ € ${calculatedReward.toFixed(2)}`
+      : `€ ${calculatedReward.toFixed(2)}`
     : providerPayoutName
-      ? `ayeT: ${providerPayoutName} (valuta del partner)`
+      ? `ayeT: ${providerPayoutName}`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
@@ -231,12 +204,38 @@ export function normalizeAyeTOffer(
   const paymentRequired = asBoolean(offer.payment_required);
   const reservationRequired = asBoolean(offer.require_reservation);
 
-  const instructions = cleanText(
+  const instructionsBase = cleanText(
     offer.conversion_instructions_long ??
       offer.conversion_instructions ??
       offer.conversion_instructions_short ??
       "",
   );
+  const cpeMilestones = Array.isArray(offer.cpe_instructions)
+    ? offer.cpe_instructions
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+          const milestone = item as Record<string, unknown>;
+          const amount = asNumber(milestone.payout);
+          if (amount == null || amount <= 0) return null;
+          const label = cleanText(
+            milestone.name ??
+              milestone.title ??
+              milestone.description ??
+              milestone.instruction ??
+              `Tappa ${index + 1}`,
+          );
+          return `${label}: € ${amount.toFixed(2)}`;
+        })
+        .filter((item): item is string => Boolean(item))
+    : [];
+  const instructions = [
+    instructionsBase,
+    cpeMilestones.length
+      ? `Ricompense per tappa (incluse nel totale): ${cpeMilestones.join(" · ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\\n");
 
   const description = cleanText(
     offer.description ??
@@ -284,9 +283,6 @@ export function normalizeAyeTOffer(
 
     economics: {
       providerPayout: providerPayoutUsd,
-      expensePercent,
-      userSharePercent,
-      fairRewardSharePercent,
     },
 
     timing: {
