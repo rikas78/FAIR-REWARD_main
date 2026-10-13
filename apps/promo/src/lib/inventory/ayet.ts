@@ -26,10 +26,8 @@ export type FairRewardActivity = {
   rewardLabel: string;
 
   economics: {
+    /** Publisher earnings in USD, available in callback data (not Offerwall API). */
     providerPayout: number | null;
-    expensePercent: number;
-    userSharePercent: number;
-    fairRewardSharePercent: number;
   };
 
   timing: {
@@ -149,13 +147,16 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  const providerPayout = asNumber(offer.payout);
-  const currencyAmount = asNumber(offer.currency_amount);
-
-  const expensePercent = 25;
-  const userSharePercent = 50;
-  const fairRewardSharePercent =
-    (100 - expensePercent) * (userSharePercent / 100);
+  // James confirmed that Offerwall API payout is the user-facing reward,
+  // configured in EUR for this ad slot. payout_usd is publisher earnings
+  // and is not exposed by the Offerwall API; currency_amount is callback-only.
+  const providerReward = asNumber(offer.payout);
+  const providerPayoutUsd = asNumber(offer.payout_usd);
+  const providerPayoutName = cleanText(offer.payout_name);
+  const calculatedReward =
+    providerReward != null && providerReward > 0
+      ? Math.round(providerReward * 100) / 100
+      : null;
 
   const category = detectCategory(offer);
   const activityType = detectActivityType(offer, category);
@@ -172,27 +173,15 @@ export function normalizeAyeTOffer(
     (providerMaxConversionSeconds ?? 0) > 86400 ||
     (providerConversionSeconds ?? 0) > 3600;
 
-  let reward: number | null = null;
-  let rewardMode: FairRewardActivity["rewardMode"] = "unavailable";
+  const reward: number | null = calculatedReward;
+  const rewardMode: FairRewardActivity["rewardMode"] =
+    calculatedReward != null ? "provider" : "unavailable";
 
-  if (currencyAmount != null && currencyAmount > 0) {
-    reward = Number(currencyAmount.toFixed(2));
-    rewardMode = "provider";
-  } else if (providerPayout != null && providerPayout > 0) {
-    reward = Number(
-      (providerPayout * (fairRewardSharePercent / 100)).toFixed(2),
-    );
-    rewardMode = "fairreward_estimate";
-  }
-
-  let rewardLabel = "Ricompensa non disponibile";
-
-  if (reward != null) {
-    rewardLabel =
-      isMilestoneOrLongForm && rewardMode === "fairreward_estimate"
-        ? `Fino a € ${reward.toFixed(2)}`
-        : `€ ${reward.toFixed(2)}`;
-  }
+  const rewardLabel = reward != null
+    ? isMilestoneOrLongForm
+      ? `Fino a € ${reward.toFixed(2)}`
+      : `€ ${reward.toFixed(2)}`
+    : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
   const devices = asArray(offer.devices);
@@ -201,12 +190,38 @@ export function normalizeAyeTOffer(
   const paymentRequired = asBoolean(offer.payment_required);
   const reservationRequired = asBoolean(offer.require_reservation);
 
-  const instructions = cleanText(
+  const instructionsBase = cleanText(
     offer.conversion_instructions_long ??
       offer.conversion_instructions ??
       offer.conversion_instructions_short ??
       "",
   );
+  const cpeMilestones = Array.isArray(offer.cpe_instructions)
+    ? offer.cpe_instructions
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+          const milestone = item as Record<string, unknown>;
+          const amount = asNumber(milestone.payout);
+          if (amount == null || amount <= 0) return null;
+          const label = cleanText(
+            milestone.name ??
+              milestone.title ??
+              milestone.description ??
+              milestone.instruction ??
+              `Tappa ${index + 1}`,
+          );
+          return `${label}: € ${amount.toFixed(2)}`;
+        })
+        .filter((item): item is string => Boolean(item))
+    : [];
+  const instructions = [
+    instructionsBase,
+    cpeMilestones.length
+      ? `Ricompense per tappa (incluse nel totale): ${cpeMilestones.join(" · ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\\n");
 
   const description = cleanText(
     offer.description ??
@@ -254,10 +269,7 @@ export function normalizeAyeTOffer(
     rewardLabel,
 
     economics: {
-      providerPayout,
-      expensePercent,
-      userSharePercent,
-      fairRewardSharePercent,
+      providerPayout: providerPayoutUsd,
     },
 
     timing: {
