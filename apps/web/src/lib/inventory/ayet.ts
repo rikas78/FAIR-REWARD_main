@@ -180,10 +180,8 @@ export function normalizeAyeTOffer(
     (providerMaxConversionSeconds ?? 0) > 86400 ||
     (providerConversionSeconds ?? 0) > 3600;
 
-  // Keep the real calculated economic value available to the UI.
-  // For multi-step/CPE campaigns this is the potential campaign value,
-  // not the reward of one single task. The planner decides separately
-  // whether the value is comparable with a single activity.
+  // The top-level payout is the total user-facing reward. For CPE offers,
+  // per-milestone payouts are displayed in the instructions below.
   const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
@@ -235,7 +233,7 @@ export function normalizeAyeTOffer(
       : "",
   ]
     .filter(Boolean)
-    .join("\\n");
+    .join("\n");
 
   const description = cleanText(
     offer.description ??
@@ -249,7 +247,8 @@ export function normalizeAyeTOffer(
     offerId &&
       asString(offer.name) &&
       typeof offer.tracking_link === "string" &&
-      offer.tracking_link,
+      offer.tracking_link &&
+      calculatedReward != null,
   );
 
   let reason: string | null = null;
@@ -258,6 +257,8 @@ export function normalizeAyeTOffer(
     reason = "Offer ID mancante";
   } else if (!offer.tracking_link) {
     reason = "Tracking link mancante";
+  } else if (calculatedReward == null) {
+    reason = "Ricompensa non disponibile";
   }
 
   return {
