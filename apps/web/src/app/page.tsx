@@ -423,6 +423,22 @@ export default function Home() {
     [activities],
   );
 
+  // Featured offer selected from live ayeT inventory; never a sample offer.
+  const featuredActivity = useMemo(
+    () =>
+      activities
+        .filter(
+          (activity) =>
+            activity.publish.ready &&
+            activity.trackingLink != null &&
+            !activity.requirements.paymentRequired &&
+            activity.reward != null &&
+            activity.reward > 0,
+        )
+        .sort((a, b) => (b.reward ?? 0) - (a.reward ?? 0))[0] ?? null,
+    [activities],
+  );
+
   const pendingFilterChanges =
     (timeEnabled ? time : null) !== appliedTime ||
     (goalEnabled ? goal : null) !== appliedGoal;
@@ -783,6 +799,76 @@ export default function Home() {
             >
               Scopri le attività →
             </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-5">
+        <div className="overflow-hidden rounded-3xl border border-yellow-300/30 bg-gradient-to-br from-[#17152a] via-[#0a1731] to-[#06132b]">
+          <div className="grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-7">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-300">
+                <span aria-hidden="true">✦</span>
+                FEATURED OFFER · IN EVIDENZA
+              </div>
+              {featuredActivity ? (
+                <>
+                  <h2 className="mt-3 text-2xl font-black sm:text-3xl">
+                    {featuredActivity.title}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+                    {featuredActivity.subtitle || featuredActivity.description}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-white/55">
+                    <span className="rounded-full border border-white/10 px-3 py-1.5">
+                      {t(featuredActivity.category)}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-3 py-1.5">
+                      ayeT · AdSlot 29639
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-3 text-2xl font-black sm:text-3xl">
+                    Scopri le offerte disponibili
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+                    Le offerte in evidenza appariranno quando l’inventory ayeT
+                    restituirà una campagna disponibile con ricompensa verificabile.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="sm:min-w-[190px] sm:text-right">
+              {featuredActivity ? (
+                <>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
+                    RICOMPENSA INDICATA
+                  </div>
+                  <div className="mt-1 text-3xl font-black text-yellow-300">
+                    {featuredActivity.rewardLabel}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedActivity(featuredActivity)}
+                    className="mt-4 w-full rounded-xl bg-yellow-300 px-5 py-3 text-xs font-black text-[#17120a] transition hover:bg-yellow-200 sm:w-auto"
+                  >
+                    Vedi offerta →
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    document.getElementById("inventory")?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="rounded-xl bg-yellow-300 px-5 py-3 text-xs font-black text-[#17120a] transition hover:bg-yellow-200"
+                >
+                  Vai alle attività →
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -1285,14 +1371,12 @@ export default function Home() {
 
                   <div className="mt-4 rounded-2xl border border-fuchsia-400/10 bg-fuchsia-400/[0.02] p-4">
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-fuchsia-300/60">
-                      ECONOMIA FAIRREWARD
+                      RICOMPENSA AYE-T
                     </div>
                     <div className="mt-2 text-sm leading-6 text-white/65">
-                      Costi provider: {selectedActivity.economics.expensePercent}% ·
-                      quota utente sul netto:{" "}
-                      {selectedActivity.economics.userSharePercent}% ·
-                      quota utente sul lordo:{" "}
-                      {selectedActivity.economics.fairRewardSharePercent.toFixed(1)}%
+                      Importo in euro determinato dalla conversione configurata
+                      nell’AdSlot. FairReward non applica una seconda conversione
+                      all’importo indicato dal provider.
                     </div>
                   </div>
 
