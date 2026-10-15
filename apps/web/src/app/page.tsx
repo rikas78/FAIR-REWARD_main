@@ -281,9 +281,12 @@ export default function Home() {
         setLoadingOffers(true);
         setOfferError(null);
 
-        const response = await fetch("/api/ayet/offers", {
-          cache: "no-store",
-        });
+        const demoRequested =
+          new URLSearchParams(window.location.search).get("demo") === "1";
+        const response = await fetch(
+          demoRequested ? "/api/ayet/offers?demo=1" : "/api/ayet/offers",
+          { cache: "no-store" },
+        );
 
         const data = await response.json();
 
