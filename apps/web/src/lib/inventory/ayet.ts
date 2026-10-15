@@ -88,6 +88,7 @@ function cleanText(value: unknown) {
 }
 
 function asNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -151,35 +152,23 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // ayeT economics:
-  // payout_usd = payout reale della conversione/campagna in USD.
-  // currency_amount = valuta virtuale del placement: NON è EUR.
-  // FairReward mostra un guadagno stimato in EUR sulla base del payout
-  // reale del provider e dell'economia FairReward.
-  const providerPayoutUsd = asNumber(offer.payout_usd);
-
-  const configuredUsdPerEur = Number(
-    process.env.NEXT_PUBLIC_FAIRREWARD_USD_EUR_RATE ?? "",
-  );
-  const usdPerEur =
-    Number.isFinite(configuredUsdPerEur) && configuredUsdPerEur > 0
-      ? configuredUsdPerEur
-      : 1.1269;
-
-  const expensePercent = 25;
+  // FairReward business rule:
+  // Treat the Offerwall API top-level payout as the EUR provider amount
+  // used for this offer's economics. Reserve 50% for operating expenses;
+  // split the remaining 50% equally between the user and FairReward.
+  // Therefore the user's displayed reward is 25% of this input amount.
+  // NOTE: James at ayeT described top-level payout as the user-facing
+  // reward for AdSlot 29639; confirm the AdSlot configuration matches
+  // this FairReward split before production launch.
+  const providerPayout = asNumber(offer.payout);
+  const expensePercent = 50;
   const userSharePercent = 50;
-  const fairRewardSharePercent =
-    (100 - expensePercent) * (userSharePercent / 100);
-
-  const providerPayoutEur =
-    providerPayoutUsd != null
-      ? providerPayoutUsd / usdPerEur
-      : null;
-
+  const fairRewardSharePercent = 25;
   const calculatedReward =
-    providerPayoutEur != null
+    providerPayout != null && providerPayout >= 0
       ? Math.round(
-          providerPayoutEur * (fairRewardSharePercent / 100) * 100,
+          providerPayout * ((100 - expensePercent) / 100) *
+            (userSharePercent / 100) * 100,
         ) / 100
       : null;
 
@@ -210,14 +199,14 @@ export function normalizeAyeTOffer(
   const reward: number | null = calculatedReward;
 
   const rewardMode: FairRewardActivity["rewardMode"] =
-    calculatedReward != null ? "fairreward_estimate" : "unavailable";
+    calculatedReward != null ? "provider" : "unavailable";
 
   const rewardLabel = isMilestoneOrLongForm
     ? calculatedReward != null
       ? `Fino a € ${calculatedReward.toFixed(2)}`
       : "Ricompensa non disponibile"
     : calculatedReward != null
-      ? `≈ € ${calculatedReward.toFixed(2)}`
+      ? `€ ${calculatedReward.toFixed(2)}`
       : "Ricompensa non disponibile";
 
   const platforms = asArray(offer.platforms);
@@ -279,7 +268,7 @@ export function normalizeAyeTOffer(
     rewardLabel,
 
     economics: {
-      providerPayout: providerPayoutUsd,
+      providerPayout,
       expensePercent,
       userSharePercent,
       fairRewardSharePercent,
