@@ -83,8 +83,12 @@ async function getDevelopmentIp() {
 
 export async function GET(request: NextRequest) {
   try {
-    // Explicit preview-only fixture mode. Never enabled by default.
-    if (process.env.FAIRREWARD_DEMO_OFFERS === "true") {
+    // Demo fixtures are available only on local development or Vercel Preview,
+    // and only when explicitly requested with ?demo=1. Never on production.
+    const demoRequested = request.nextUrl.searchParams.get("demo") === "1";
+    const demoAllowed =
+      process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV !== "production";
+    if (demoRequested && demoAllowed) {
       const demoOffers: Array<Record<string, unknown>> = [
         {
           id: "demo-survey-01",
