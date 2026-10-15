@@ -18,6 +18,7 @@ type Color = "pink" | "cyan" | "yellow" | "green" | "purple" | "orange";
 
 type Activity = FairRewardActivity & {
   color: Color;
+  demo?: boolean;
   rewardEstimated: boolean;
   trackingLink: string | null;
 };
@@ -161,6 +162,8 @@ export default function Home() {
 
   const translations: Record<string, string> = {
     "Il tuo tempo ha valore": "Your time has value",
+    "DEMO": "DEMO",
+    "Importo indicativo di esempio: non è una ricompensa reale né confermata da ayeT.": "Illustrative demo amount: not a real reward and not confirmed by ayeT.",
     "ACCEDI": "LOG IN",
     "Home": "Home",
     "Attività": "Tasks",
@@ -300,6 +303,7 @@ export default function Home() {
         const mapped: Activity[] = Array.isArray(data?.activities)
           ? data.activities.map((activity: Activity, index: number) => ({
               ...activity,
+              demo: data?.demo === true || activity.demo === true,
               color: colors[index % colors.length],
             }))
           : [];
@@ -437,7 +441,7 @@ export default function Home() {
 
     let candidates = source.filter(
       (activity) =>
-        activity.trackingLink != null &&
+        (activity.trackingLink != null || activity.demo === true) &&
         !activity.requirements.paymentRequired,
     );
 
@@ -569,7 +573,8 @@ export default function Home() {
   ]);
 
   function launchActivity(activity: Activity) {
-    if (!activity.publish.ready) return;
+    // Demo cards are visual examples only and must never launch or earn.
+    if (activity.demo || !activity.publish.ready) return;
 
     setLaunchingOffer(activity.id);
     window.location.assign(
@@ -1031,6 +1036,11 @@ export default function Home() {
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
                           {item.requirements.paymentRequired ? t("A PAGAMENTO") : t("GRATUITA")}
                         </div>
+                        {item.demo && (
+                          <div className="inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[10px] font-black text-amber-200">
+                            {t("DEMO")}
+                          </div>
+                        )}
                       </div>
 
                       <h3 className="mt-4 text-xl font-black">
@@ -1075,7 +1085,11 @@ export default function Home() {
                           {item.rewardLabel}
                         </div>
 
-                        {item.rewardMode === "fairreward_estimate" && (
+                        {item.demo ? (
+                          <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-amber-200/80">
+                            {t("Importo indicativo di esempio: non è una ricompensa reale né confermata da ayeT.")}
+                          </div>
+                        ) : item.rewardMode === "fairreward_estimate" && (
                           <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-white/40">
                             {item.timing.isMilestoneOrLongForm
                               ? t("Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi.")
@@ -1101,10 +1115,10 @@ export default function Home() {
 
                         <button
                           type="button"
-                          disabled={!item.publish.ready}
+                          disabled={item.demo || !item.publish.ready}
                           onClick={() => launchActivity(item)}
                           className={`rounded-xl px-5 py-3 text-xs font-black ${
-                            item.publish.ready
+                            item.publish.ready && !item.demo
                               ? `${style.button} shadow-lg`
                               : "cursor-not-allowed bg-white/15 text-white/40"
                           }`}
@@ -1205,11 +1219,13 @@ export default function Home() {
                         {selectedActivity.rewardLabel}
                       </div>
                       <div className="mt-2 text-xs text-white/40">
-                        {selectedActivity.rewardMode === "provider"
-                          ? "Ricompensa fornita dalla configurazione valuta del provider."
-                          : selectedActivity.rewardMode === "fairreward_estimate"
-                            ? "Ricompensa calcolata dalle impostazioni economiche FairReward."
-                            : "Ricompensa non disponibile."}
+                        {selectedActivity.demo
+                          ? "Esempio dimostrativo: importo fittizio, non pagabile e non confermato da ayeT."
+                          : selectedActivity.rewardMode === "provider"
+                            ? "Ricompensa indicata dal provider per questo AdSlot."
+                            : selectedActivity.rewardMode === "fairreward_estimate"
+                              ? "Stima FairReward basata sui dati disponibili."
+                              : "Ricompensa non disponibile."}
                       </div>
                     </div>
 
@@ -1329,10 +1345,10 @@ export default function Home() {
                     </button>
 
                     <button
-                      disabled={!selectedActivity.publish.ready}
+                      disabled={selectedActivity.demo || !selectedActivity.publish.ready}
                       onClick={() => launchActivity(selectedActivity)}
                       className={`rounded-xl px-5 py-3 text-xs font-black ${
-                        selectedActivity.publish.ready
+                        selectedActivity.publish.ready && !selectedActivity.demo
                           ? style.button
                           : "cursor-not-allowed bg-white/15 text-white/40"
                       }`}
