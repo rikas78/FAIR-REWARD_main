@@ -505,6 +505,17 @@ export default function Home() {
       return candidates;
     }
 
+    // The goal selector is a recommendation filter, not a reason to hide
+    // real offers. Keep the full live inventory visible; sorting above still
+    // prioritizes offers close to the selected target.
+    if (appliedGoal != null) {
+      candidates = [
+        ...rewarded,
+        ...candidates.filter((activity) => !rewarded.some((item) => item.id === activity.id)),
+      ];
+    }
+    return candidates;
+
     const target = Number(appliedGoal);
 
     let best: Activity[] = [];
