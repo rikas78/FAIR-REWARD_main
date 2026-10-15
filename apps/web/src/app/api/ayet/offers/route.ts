@@ -83,6 +83,105 @@ async function getDevelopmentIp() {
 
 export async function GET(request: NextRequest) {
   try {
+    // Explicit preview-only fixture mode. Never enabled by default.
+    if (process.env.FAIRREWARD_DEMO_OFFERS === "true") {
+      const demoOffers: Array<Record<string, unknown>> = [
+        {
+          id: "demo-survey-01",
+          name: "Sondaggio rapido",
+          type: "survey",
+          description: "Esempio di sondaggio breve per mostrare come appariranno le offerte.",
+          payout: 0.35,
+          conversion_time: 300,
+          platforms: ["Web"],
+          devices: ["Mobile", "Desktop"],
+          tracking_link: "",
+          offer_status: "demo",
+        },
+        {
+          id: "demo-app-02",
+          name: "Prova una nuova app",
+          type: "app install",
+          description: "Esempio di installazione e primo avvio di un'app.",
+          payout: 1.2,
+          conversion_time: 600,
+          platforms: ["Android"],
+          devices: ["Android"],
+          tracking_link: "",
+          offer_status: "demo",
+        },
+        {
+          id: "demo-register-03",
+          name: "Registrazione e profilo",
+          type: "registration",
+          description: "Esempio di registrazione e completamento del profilo richiesto.",
+          payout: 0.75,
+          conversion_time: 480,
+          platforms: ["Web"],
+          devices: ["Mobile", "Desktop"],
+          tracking_link: "",
+          offer_status: "demo",
+        },
+        {
+          id: "demo-cpe-04",
+          name: "Percorso a obiettivi",
+          type: "cpe",
+          conversion_type: "cpe",
+          description: "Esempio di campagna multi-step: il totale si matura completando i singoli obiettivi.",
+          payout: 6.4,
+          conversion_time: 300,
+          max_conversion_time: 604800,
+          platforms: ["Android"],
+          devices: ["Android"],
+          tracking_link: "",
+          offer_status: "demo",
+          cpe_instructions: [
+            { name: "Completa il primo obiettivo", payout: 0.4 },
+            { name: "Raggiungi il livello 5", payout: 1.5 },
+            { name: "Completa il livello finale", payout: 4.5 }
+          ]
+        },
+        {
+          id: "demo-video-05",
+          name: "Guarda e completa",
+          type: "video",
+          description: "Esempio di attività breve con conferma finale.",
+          payout: 0.2,
+          conversion_time: 180,
+          platforms: ["Web"],
+          devices: ["Mobile", "Desktop"],
+          tracking_link: "",
+          offer_status: "demo",
+        },
+        {
+          id: "demo-game-06",
+          name: "Scopri un nuovo gioco",
+          type: "game",
+          description: "Esempio di campagna di gioco con ricompensa potenziale.",
+          payout: 2.8,
+          conversion_time: 1800,
+          max_conversion_time: 259200,
+          platforms: ["Android"],
+          devices: ["Android"],
+          tracking_link: "",
+          offer_status: "demo",
+        }
+      ];
+      const activities: FairRewardActivity[] = normalizeAyeTOffers(demoOffers);
+      return NextResponse.json({
+        provider: "ayeT",
+        status: "demo",
+        demo: true,
+        fetchedAt: new Date().toISOString(),
+        providerNumOffers: activities.length,
+        rawOfferCount: activities.length,
+        publishableOffers: 0,
+        num_offers: activities.length,
+        fieldCoverage: { offers: activities.length, payout: activities.length },
+        activities: activities.map((activity) => ({ ...activity, demo: true })),
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     const identity = resolveExternalIdentifier(request);
     const externalIdentifier = identity.externalIdentifier;
 
