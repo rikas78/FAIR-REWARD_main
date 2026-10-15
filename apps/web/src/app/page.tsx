@@ -162,8 +162,6 @@ export default function Home() {
 
   const translations: Record<string, string> = {
     "Il tuo tempo ha valore": "Your time has value",
-    "DEMO": "DEMO",
-    "Importo indicativo di esempio: non è una ricompensa reale né confermata da ayeT.": "Illustrative demo amount: not a real reward and not confirmed by ayeT.",
     "ACCEDI": "LOG IN",
     "Home": "Home",
     "Attività": "Tasks",
@@ -281,12 +279,9 @@ export default function Home() {
         setLoadingOffers(true);
         setOfferError(null);
 
-        const demoRequested =
-          new URLSearchParams(window.location.search).get("demo") === "1";
-        const response = await fetch(
-          demoRequested ? "/api/ayet/offers?demo=1" : "/api/ayet/offers",
-          { cache: "no-store" },
-        );
+        const response = await fetch("/api/ayet/offers", {
+          cache: "no-store",
+        });
 
         const data = await response.json();
 
@@ -306,7 +301,6 @@ export default function Home() {
         const mapped: Activity[] = Array.isArray(data?.activities)
           ? data.activities.map((activity: Activity, index: number) => ({
               ...activity,
-              demo: data?.demo === true || activity.demo === true,
               color: colors[index % colors.length],
             }))
           : [];
@@ -442,11 +436,7 @@ export default function Home() {
             (activity) => activity.category === filter,
           );
 
-    let candidates = source.filter(
-      (activity) =>
-        (activity.trackingLink != null || activity.demo === true) &&
-        !activity.requirements.paymentRequired,
-    );
+    let candidates = source;
 
     if (appliedTime != null) {
       const targetSeconds = Number(appliedTime) * 60;
@@ -509,11 +499,10 @@ export default function Home() {
           Math.abs(aReward - Number(appliedGoal)) -
           Math.abs(bReward - Number(appliedGoal))
         );
-      })
-      .slice(0, 20);
+      });
 
     if (appliedGoal == null || rewarded.length === 0) {
-      return candidates.slice(0, 20);
+      return candidates;
     }
 
     const target = Number(appliedGoal);
@@ -576,8 +565,7 @@ export default function Home() {
   ]);
 
   function launchActivity(activity: Activity) {
-    // Demo cards are visual examples only and must never launch or earn.
-    if (activity.demo || !activity.publish.ready) return;
+    if (!activity.publish.ready) return;
 
     setLaunchingOffer(activity.id);
     window.location.assign(
@@ -1039,11 +1027,7 @@ export default function Home() {
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
                           {item.requirements.paymentRequired ? t("A PAGAMENTO") : t("GRATUITA")}
                         </div>
-                        {item.demo && (
-                          <div className="inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[10px] font-black text-amber-200">
-                            {t("DEMO")}
-                          </div>
-                        )}
+
                       </div>
 
                       <h3 className="mt-4 text-xl font-black">
@@ -1088,11 +1072,7 @@ export default function Home() {
                           {item.rewardLabel}
                         </div>
 
-                        {item.demo ? (
-                          <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-amber-200/80">
-                            {t("Importo indicativo di esempio: non è una ricompensa reale né confermata da ayeT.")}
-                          </div>
-                        ) : item.rewardMode === "fairreward_estimate" && (
+                        {item.rewardMode === "fairreward_estimate" && (
                           <div className="mt-1 max-w-[280px] text-[10px] leading-4 text-white/40">
                             {item.timing.isMilestoneOrLongForm
                               ? t("Valore potenziale della campagna; la ricompensa viene maturata attraverso più obiettivi.")
@@ -1118,10 +1098,10 @@ export default function Home() {
 
                         <button
                           type="button"
-                          disabled={item.demo || !item.publish.ready}
+                          disabled={!item.publish.ready}
                           onClick={() => launchActivity(item)}
                           className={`rounded-xl px-5 py-3 text-xs font-black ${
-                            item.publish.ready && !item.demo
+                            item.publish.ready
                               ? `${style.button} shadow-lg`
                               : "cursor-not-allowed bg-white/15 text-white/40"
                           }`}
@@ -1222,13 +1202,11 @@ export default function Home() {
                         {selectedActivity.rewardLabel}
                       </div>
                       <div className="mt-2 text-xs text-white/40">
-                        {selectedActivity.demo
-                          ? "Esempio dimostrativo: importo fittizio, non pagabile e non confermato da ayeT."
-                          : selectedActivity.rewardMode === "provider"
-                            ? "Ricompensa indicata dal provider per questo AdSlot."
-                            : selectedActivity.rewardMode === "fairreward_estimate"
-                              ? "Stima FairReward basata sui dati disponibili."
-                              : "Ricompensa non disponibile."}
+                        {selectedActivity.rewardMode === "provider"
+                          ? "Ricompensa indicata dal provider per questo AdSlot."
+                          : selectedActivity.rewardMode === "fairreward_estimate"
+                            ? "Stima FairReward basata sui dati disponibili."
+                            : "Ricompensa non disponibile."}
                       </div>
                     </div>
 
@@ -1348,10 +1326,10 @@ export default function Home() {
                     </button>
 
                     <button
-                      disabled={selectedActivity.demo || !selectedActivity.publish.ready}
+                      disabled={!selectedActivity.publish.ready}
                       onClick={() => launchActivity(selectedActivity)}
                       className={`rounded-xl px-5 py-3 text-xs font-black ${
-                        selectedActivity.publish.ready && !selectedActivity.demo
+                        selectedActivity.publish.ready
                           ? style.button
                           : "cursor-not-allowed bg-white/15 text-white/40"
                       }`}
