@@ -152,18 +152,24 @@ function detectActivityType(
 export function normalizeAyeTOffer(
   offer: Record<string, unknown>,
 ): FairRewardActivity {
-  // James Lonergan (ayeT), 12 Oct 2026:
-  // AdSlot 29639 is configured in EUR. The Offerwall API's top-level
-  // payout is the user-facing reward after the AdSlot conversion rate.
-  // Do NOT convert it again, apply a second revenue share, or use
-  // payout_usd/currency_amount from this Offerwall API response.
+  // FairReward business rule:
+  // Treat the Offerwall API top-level payout as the EUR provider amount
+  // used for this offer's economics. Reserve 50% for operating expenses;
+  // split the remaining 50% equally between the user and FairReward.
+  // Therefore the user's displayed reward is 25% of this input amount.
+  // NOTE: James at ayeT described top-level payout as the user-facing
+  // reward for AdSlot 29639; confirm the AdSlot configuration matches
+  // this FairReward split before production launch.
   const providerPayout = asNumber(offer.payout);
-  const expensePercent = 0;
-  const userSharePercent = 100;
-  const fairRewardSharePercent = 100;
+  const expensePercent = 50;
+  const userSharePercent = 50;
+  const fairRewardSharePercent = 25;
   const calculatedReward =
     providerPayout != null && providerPayout >= 0
-      ? Math.round(providerPayout * 100) / 100
+      ? Math.round(
+          providerPayout * ((100 - expensePercent) / 100) *
+            (userSharePercent / 100) * 100,
+        ) / 100
       : null;
 
   const category = detectCategory(offer);
