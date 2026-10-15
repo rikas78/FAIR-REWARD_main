@@ -18,6 +18,7 @@ type Color = "pink" | "cyan" | "yellow" | "green" | "purple" | "orange";
 
 type Activity = FairRewardActivity & {
   color: Color;
+  demo?: boolean;
   rewardEstimated: boolean;
   trackingLink: string | null;
 };
@@ -435,11 +436,7 @@ export default function Home() {
             (activity) => activity.category === filter,
           );
 
-    let candidates = source.filter(
-      (activity) =>
-        activity.trackingLink != null &&
-        !activity.requirements.paymentRequired,
-    );
+    let candidates = source;
 
     if (appliedTime != null) {
       const targetSeconds = Number(appliedTime) * 60;
@@ -480,86 +477,18 @@ export default function Home() {
         });
     }
 
-    // The goal planner works with comparable single-step rewards only.
-    // CPE/game/multi-step campaigns can show their potential value on the
-    // card, but that total cannot be treated as one activity worth €X.
+    // Showing inventory must never hide real offers. The goal selector only
+    // affects ordering: show all offers, with matching single-step rewards first.
     const rewarded = candidates
-      .filter(
-        (activity) =>
-          activity.reward != null &&
-          activity.reward > 0 &&
-          !activity.timing.isMilestoneOrLongForm,
-      )
+      .filter((activity) => activity.reward != null && activity.reward > 0 && !activity.timing.isMilestoneOrLongForm)
       .sort((a, b) => {
-        const aReward = a.reward ?? 0;
-        const bReward = b.reward ?? 0;
-
-        if (appliedGoal == null) {
-          return bReward - aReward;
-        }
-
-        return (
-          Math.abs(aReward - Number(appliedGoal)) -
-          Math.abs(bReward - Number(appliedGoal))
-        );
-      })
-      .slice(0, 20);
-
-    if (appliedGoal == null || rewarded.length === 0) {
-      return candidates.slice(0, 20);
-    }
-
-    const target = Number(appliedGoal);
-
-    let best: Activity[] = [];
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    function score(selection: Activity[]): number {
-      const total = selection.reduce(
-        (sum: number, activity: Activity) =>
-          sum + (activity.reward ?? 0),
-        0,
-      );
-
-      const difference = Math.abs(total - target);
-      const overshoot = Math.max(0, total - target);
-
-      return difference + overshoot * 0.08 + selection.length * 0.002;
-    }
-
-    function visit(
-      index: number,
-      selection: Activity[],
-      total: number,
-    ): void {
-      if (selection.length > 5) return;
-
-      if (selection.length > 0) {
-        const currentScore = score(selection);
-
-        if (currentScore < bestScore) {
-          bestScore = currentScore;
-          best = [...selection];
-        }
-      }
-
-      if (index >= rewarded.length) return;
-
-      for (let i = index; i < rewarded.length; i += 1) {
-        const reward = rewarded[i].reward ?? 0;
-        const nextTotal = total + reward;
-
-        if (nextTotal > target * 1.45) continue;
-
-        selection.push(rewarded[i]);
-        visit(i + 1, selection, nextTotal);
-        selection.pop();
-      }
-    }
-
-    visit(0, [], 0);
-
-    return best.length ? best : rewarded.slice(0, 5);
+        if (appliedGoal == null) return (b.reward ?? 0) - (a.reward ?? 0);
+        return Math.abs((a.reward ?? 0) - Number(appliedGoal)) -
+          Math.abs((b.reward ?? 0) - Number(appliedGoal));
+      });
+    const rewardedIds = new Set(rewarded.map((activity) => activity.id));
+    const otherOffers = candidates.filter((activity) => !rewardedIds.has(activity.id));
+    return [...rewarded, ...otherOffers];
   }, [
     activities,
     filter,
@@ -1031,6 +960,7 @@ export default function Home() {
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
                           {item.requirements.paymentRequired ? t("A PAGAMENTO") : t("GRATUITA")}
                         </div>
+
                       </div>
 
                       <h3 className="mt-4 text-xl font-black">
@@ -1206,9 +1136,9 @@ export default function Home() {
                       </div>
                       <div className="mt-2 text-xs text-white/40">
                         {selectedActivity.rewardMode === "provider"
-                          ? "Ricompensa fornita dalla configurazione valuta del provider."
+                          ? "Ricompensa indicata dal provider per questo AdSlot."
                           : selectedActivity.rewardMode === "fairreward_estimate"
-                            ? "Ricompensa calcolata dalle impostazioni economiche FairReward."
+                            ? "Stima FairReward basata sui dati disponibili."
                             : "Ricompensa non disponibile."}
                       </div>
                     </div>
