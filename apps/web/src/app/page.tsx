@@ -497,13 +497,40 @@ export default function Home() {
     filtersApplied,
   ]);
 
-  function launchActivity(activity: Activity) {
+  async function launchActivity(activity: Activity) {
     if (!activity.publish.ready) return;
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setShowLogin(true);
+      return;
+    }
+
     setLaunchingOffer(activity.id);
-    window.location.assign(
-      `/api/ayet/launch?offerId=${encodeURIComponent(activity.offerId)}`,
-    );
+    try {
+      const response = await fetch("/api/ayet/click", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ offerId: activity.offerId }),
+      });
+      const body = await response.json().catch(() => null) as { url?: string; error?: string } | null;
+      if (!response.ok || !body?.url) {
+        setLaunchingOffer(null);
+        window.alert(body?.error === "click_registration_failed"
+          ? "Non riesco a registrare l'attività. Riprova tra poco."
+          : "Accedi di nuovo e riprova.");
+        if (response.status === 401) setShowLogin(true);
+        return;
+      }
+      window.location.assign(body.url);
+    } catch {
+      setLaunchingOffer(null);
+      window.alert("Connessione non disponibile. Riprova.");
+    }
   }
 
   return (
