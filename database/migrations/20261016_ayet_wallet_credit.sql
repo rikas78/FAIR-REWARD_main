@@ -68,7 +68,10 @@ begin
   end if;
   select * into v_settings from public.ayet_settings where singleton = true;
   if p_external_identifier ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
-    select w.user_id into v_user from public.wallets w where w.user_id = p_external_identifier::uuid;
+    select p.id into v_user from public.profiles p where p.id = p_external_identifier::uuid;
+    if v_user is not null then
+      insert into public.wallets(user_id) values(v_user) on conflict (user_id) do nothing;
+    end if;
   end if;
   if p_custom_1 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
     select c.click_id, c.user_id into v_click, v_click_user
