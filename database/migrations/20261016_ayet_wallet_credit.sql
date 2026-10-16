@@ -53,6 +53,10 @@ declare
   v_settings public.ayet_settings%rowtype;
   v_cents bigint;
   v_take bigint;
+  v_pending bigint;
+  v_available bigint;
+  v_from_pending bigint;
+  v_from_available bigint;
   v_base text;
 begin
   if coalesce(btrim(p_transaction_id),'') = '' or coalesce(btrim(p_external_identifier),'') = '' then
@@ -82,11 +86,21 @@ begin
     end if;
     v_cents := least(floor(abs(p_currency_amount)*100)::bigint, greatest(0,v_original.credited_cents-v_original.reversed_cents));
     if v_cents > 0 then
-      update public.wallets set pending_cents = greatest(0,pending_cents-v_cents), available_cents = greatest(0,available_cents-v_cents), updated_at=now()
+      select pending_cents, available_cents into v_pending, v_available
+        from public.wallets where user_id = v_original.user_id for update;
+      v_from_pending := least(coalesce(v_pending,0), v_cents);
+      v_from_available := least(coalesce(v_available,0), v_cents-v_from_pending);
+      v_take := v_from_pending + v_from_available;
+      update public.wallets
+         set pending_cents = pending_cents-v_from_pending,
+             available_cents = available_cents-v_from_available,
+             lifetime_earned_cents = greatest(0,lifetime_earned_cents-v_take),
+             updated_at=now()
        where user_id = v_original.user_id;
       insert into public.wallet_transactions(user_id,type,amount_cents,currency,reference_type,reference_id,description)
-      values(v_original.user_id,'reversal',-v_cents,'EUR','ayet_chargeback',p_transaction_id,'ayeT reversal');
-      update public.ayet_callbacks set reversed_cents = reversed_cents+v_cents where transaction_id=v_base;
+      values(v_original.user_id,'reversal',-v_take,'EUR','ayet_chargeback',p_transaction_id,'ayeT reversal');
+      update public.ayet_callbacks set reversed_cents = reversed_cents+v_take where transaction_id=v_base;
+      v_cents := v_take;
     end if;
     insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,credited_cents,payload)
     values(p_transaction_id,'chargeback',p_external_identifier,v_original.user_id,v_original.click_id,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'reversal_applied',v_cents,coalesce(p_payload,'{}'::jsonb));
