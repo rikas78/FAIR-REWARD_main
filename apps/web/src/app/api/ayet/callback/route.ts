@@ -2,32 +2,51 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+function canonicalizeParams(params: URLSearchParams) {
+  // ayeT requires callback parameters to be sorted alphabetically before HMAC.
+  const entries = [...params.entries()]
+    .filter(([key]) => key !== "security_hash")
+    .sort(([keyA, valueA], [keyB, valueB]) =>
+      keyA === keyB
+        ? valueA.localeCompare(valueB)
+        : keyA.localeCompare(keyB),
+    );
+
+  return new URLSearchParams(entries).toString();
+}
+
 function verifySignature(
   raw: string,
   signature: string | null,
   secret: string | undefined,
 ) {
-  if (!secret) return true;
-  if (!signature) return false;
+  // A required signature must never silently pass when the secret is absent.
+  if (!secret || !signature) return false;
 
-  const expected = createHmac("sha256", secret)
-    .update(raw)
-    .digest("hex");
+  const expected = createHmac("sha256", secret).update(raw).digest();
+  const suppliedHex = signature.trim().replace(/^sha256=/i, "");
 
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
+  if (!/^[0-9a-f]{64}$/i.test(suppliedHex)) return false;
 
-  return a.length === b.length && timingSafeEqual(a, b);
+  const supplied = Buffer.from(suppliedHex, "hex");
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+}
+
+function finiteParam(params: URLSearchParams, key: string) {
+  const raw = params.get(key);
+  if (raw == null || raw.trim() === "") return 0;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
 }
 
 async function handleCallback(request: NextRequest) {
   const params =
     request.method === "GET"
-      ? request.nextUrl.searchParams
+      ? new URLSearchParams(request.nextUrl.searchParams)
       : new URLSearchParams(await request.text());
 
-  const transactionId = params.get("transaction_id");
-  const externalIdentifier = params.get("external_identifier");
+  const transactionId = params.get("transaction_id")?.trim();
+  const externalIdentifier = params.get("external_identifier")?.trim();
 
   if (!transactionId || !externalIdentifier) {
     return NextResponse.json(
@@ -36,33 +55,71 @@ async function handleCallback(request: NextRequest) {
     );
   }
 
+  const callbackType = (params.get("callback_type") ?? "").trim().toLowerCase();
+  const eventHint = (
+    params.get("status") ??
+    params.get("event") ??
+    ""
+  ).trim().toLowerCase();
+
+  const payoutUsd = finiteParam(params, "payout_usd");
+  const currencyAmount = finiteParam(params, "currency_amount");
+
+  if (payoutUsd == null || currencyAmount == null) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_amount" },
+      { status: 400 },
+    );
+  }
+
+  const isChargeback =
+    callbackType === "chargeback" ||
+    params.get("is_chargeback") === "1" ||
+    eventHint === "chargeback" ||
+    eventHint === "reversal" ||
+    payoutUsd < 0 ||
+    currencyAmount < 0;
+
   const apiKey = process.env.AYET_API_KEY;
   const signature =
     request.headers.get("x-ayetstudios-security-hash") ??
     params.get("security_hash");
 
-  if (
-    process.env.AYET_CALLBACK_HMAC_REQUIRED === "true" &&
-    !verifySignature(params.toString(), signature, apiKey)
-  ) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_signature" },
-      { status: 401 },
-    );
+  if (process.env.AYET_CALLBACK_HMAC_REQUIRED === "true") {
+    if (!verifySignature(canonicalizeParams(params), signature, apiKey)) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_signature" },
+        { status: 401 },
+      );
+    }
   }
 
-  const payoutUsd = Number(params.get("payout_usd") ?? 0);
-  const currencyAmount = Number(params.get("currency_amount") ?? 0);
+  // ayeT optional callbacks can share transaction_id with the paid conversion.
+  // They are notifications, not additional user credits; do not overwrite the
+  // financial transaction row or credit them as a conversion.
+  const nonFinancialCallbackTypes = new Set([
+    "optional",
+    "installation",
+    "iap",
+    "iaa",
+  ]);
+  if (!isChargeback && nonFinancialCallbackTypes.has(callbackType)) {
+    return NextResponse.json({ ok: true, ignored: true });
+  }
+
+  const eventType = isChargeback
+    ? "chargeback"
+    : callbackType || params.get("status") || params.get("event") || "conversion";
+
+  const effectivePayoutUsd = isChargeback ? -Math.abs(payoutUsd) : payoutUsd;
+  const effectiveCurrencyAmount = isChargeback
+    ? -Math.abs(currencyAmount)
+    : currencyAmount;
   const currencyIdentifier =
     params.get("currency_identifier") ??
     process.env.AYET_CURRENCY_IDENTIFIER ??
     "";
-
-  const eventType =
-    params.get("status") ??
-    params.get("event") ??
-    "conversion";
-
+  const metadata = Object.fromEntries(params.entries());
   const supabase = await getSupabaseServerClient();
 
   const { error: conversionError } = await supabase
@@ -72,62 +129,108 @@ async function handleCallback(request: NextRequest) {
         transaction_id: transactionId,
         external_identifier: externalIdentifier,
         event_type: eventType,
-        payout_usd: payoutUsd,
-        currency_amount: currencyAmount,
+        payout_usd: effectivePayoutUsd,
+        currency_amount: effectiveCurrencyAmount,
         currency_identifier: currencyIdentifier,
-        raw_payload: Object.fromEntries(params.entries()),
+        raw_payload: metadata,
       },
       { onConflict: "transaction_id" },
     );
 
   if (conversionError) {
-    console.error("ayeT conversion error", conversionError);
+    console.error("ayeT conversion storage failed", conversionError);
     return NextResponse.json(
       { ok: false, error: "conversion_storage_failed" },
       { status: 500 },
     );
   }
 
-  if (eventType === "chargeback" || eventType === "reversal") {
-    await supabase.from("user_reward_ledger").insert({
-      external_identifier: externalIdentifier,
-      transaction_id: transactionId,
-      entry_type: "reversal",
-      amount: -Math.abs(currencyAmount),
-      currency_identifier: currencyIdentifier,
-      provider_payout_usd: -Math.abs(payoutUsd),
-      metadata: Object.fromEntries(params.entries()),
-    });
+  if (isChargeback || eventType === "reversal") {
+    const { error: ledgerError } = await supabase
+      .from("user_reward_ledger")
+      .upsert(
+        {
+          external_identifier: externalIdentifier,
+          transaction_id: transactionId,
+          entry_type: "reversal",
+          amount: -Math.abs(effectiveCurrencyAmount),
+          currency_identifier: currencyIdentifier,
+          provider_payout_usd: -Math.abs(effectivePayoutUsd),
+          metadata,
+        },
+        { onConflict: "transaction_id" },
+      );
 
-    await supabase.from("platform_revenue").insert({
-      transaction_id: transactionId,
-      revenue_type: "chargeback",
-      provider_payout_usd: -Math.abs(payoutUsd),
-      metadata: Object.fromEntries(params.entries()),
-    });
+    if (ledgerError) {
+      console.error("ayeT reversal ledger write failed", ledgerError);
+      return NextResponse.json(
+        { ok: false, error: "ledger_storage_failed" },
+        { status: 500 },
+      );
+    }
+
+    const { error: revenueError } = await supabase
+      .from("platform_revenue")
+      .upsert(
+        {
+          transaction_id: transactionId,
+          revenue_type: "chargeback",
+          provider_payout_usd: -Math.abs(effectivePayoutUsd),
+          metadata,
+        },
+        { onConflict: "transaction_id" },
+      );
+
+    if (revenueError) {
+      console.error("ayeT chargeback revenue write failed", revenueError);
+      return NextResponse.json(
+        { ok: false, error: "revenue_storage_failed" },
+        { status: 500 },
+      );
+    }
   } else {
-    await supabase.from("user_reward_ledger").upsert(
-      {
-        external_identifier: externalIdentifier,
-        transaction_id: transactionId,
-        entry_type: "credit",
-        amount: currencyAmount,
-        currency_identifier: currencyIdentifier,
-        provider_payout_usd: payoutUsd,
-        metadata: Object.fromEntries(params.entries()),
-      },
-      { onConflict: "transaction_id" },
-    );
+    const { error: ledgerError } = await supabase
+      .from("user_reward_ledger")
+      .upsert(
+        {
+          external_identifier: externalIdentifier,
+          transaction_id: transactionId,
+          entry_type: "credit",
+          amount: effectiveCurrencyAmount,
+          currency_identifier: currencyIdentifier,
+          provider_payout_usd: effectivePayoutUsd,
+          metadata,
+        },
+        { onConflict: "transaction_id" },
+      );
 
-    await supabase.from("platform_revenue").upsert(
-      {
-        transaction_id: transactionId,
-        revenue_type: "provider_conversion",
-        provider_payout_usd: payoutUsd,
-        metadata: Object.fromEntries(params.entries()),
-      },
-      { onConflict: "transaction_id" },
-    );
+    if (ledgerError) {
+      console.error("ayeT conversion ledger write failed", ledgerError);
+      return NextResponse.json(
+        { ok: false, error: "ledger_storage_failed" },
+        { status: 500 },
+      );
+    }
+
+    const { error: revenueError } = await supabase
+      .from("platform_revenue")
+      .upsert(
+        {
+          transaction_id: transactionId,
+          revenue_type: "provider_conversion",
+          provider_payout_usd: effectivePayoutUsd,
+          metadata,
+        },
+        { onConflict: "transaction_id" },
+      );
+
+    if (revenueError) {
+      console.error("ayeT conversion revenue write failed", revenueError);
+      return NextResponse.json(
+        { ok: false, error: "revenue_storage_failed" },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -23,6 +23,10 @@ function summarizeProviderFields(offers: unknown) {
     offers: list.length,
     payout_usd: list.filter((o) => num(o.payout_usd)).length,
     payout: list.filter((o) => num(o.payout)).length,
+    payout_name: list.filter(
+      (o) => typeof o.payout_name === "string" && o.payout_name.trim() !== "",
+    ).length,
+    payout_base: list.filter((o) => num(o.payout_base)).length,
     currency_amount_positive: list.filter(
       (o) => num(o.currency_amount) && Number(o.currency_amount) > 0,
     ).length,
