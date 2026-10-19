@@ -57,7 +57,7 @@ begin
        set wallet_applied_at = now()
       from pending p
      where l.id = p.id
-    returning p.amount
+    returning l.amount
   )
   select coalesce(round(sum(amount) * 100), 0)::bigint
     into v_delta_cents
