@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 function canonicalize(params: URLSearchParams) {
   const entries = [...params.entries()]
     .filter(([key]) => key !== "security_hash")
-    .sort(([ka, va], [kb, vb]) => ka === kb ? va.localeCompare(vb) : ka.localeCompare(kb));
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
   return new URLSearchParams(entries).toString();
 }
 
