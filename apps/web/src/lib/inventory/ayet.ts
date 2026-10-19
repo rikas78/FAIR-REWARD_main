@@ -357,5 +357,12 @@ export function normalizeAyeTOffer(
 export function normalizeAyeTOffers(
   offers: Array<Record<string, unknown>>,
 ) {
-  return offers.map(normalizeAyeTOffer);
+  const normalized = offers.map(normalizeAyeTOffer);
+  const unique = new Map<string, FairRewardActivity>();
+  for (const offer of normalized) {
+    // ayeT may return the same offer more than once in a single inventory response.
+    // Keep one card per stable provider offer ID.
+    if (!unique.has(offer.id)) unique.set(offer.id, offer);
+  }
+  return [...unique.values()];
 }
