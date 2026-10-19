@@ -163,7 +163,7 @@ async function handleCallback(request: NextRequest) {
           provider_payout_usd: -Math.abs(effectivePayoutUsd),
           metadata,
         },
-        { onConflict: "transaction_id" },
+        { onConflict: "transaction_id", ignoreDuplicates: true },
       );
 
     if (ledgerError) {
@@ -206,7 +206,7 @@ async function handleCallback(request: NextRequest) {
           provider_payout_usd: effectivePayoutUsd,
           metadata,
         },
-        { onConflict: "transaction_id" },
+        { onConflict: "transaction_id", ignoreDuplicates: true },
       );
 
     if (ledgerError) {
