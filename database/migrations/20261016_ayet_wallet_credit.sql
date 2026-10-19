@@ -57,6 +57,8 @@ declare
   v_click_user uuid;
   v_click uuid;
   v_original public.ayet_callbacks%rowtype;
+  v_orphan public.ayet_callbacks%rowtype;
+  v_replay_result jsonb;
   v_settings public.ayet_settings%rowtype;
   v_cents bigint;
   v_take bigint;
@@ -156,6 +158,29 @@ begin
   values(v_user,'reward',v_cents,'EUR','ayet_conversion',p_transaction_id,'ayeT conversion pending');
   insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,credited_cents,payload)
   values(p_transaction_id,'conversion',p_external_identifier,v_user,v_click,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'credited',v_cents,coalesce(p_payload,'{}'::jsonb));
+
+  -- A reversal may arrive before its conversion callback. Replay that stored
+  -- reversal now that the original credit exists, within the same transaction.
+  select * into v_orphan from public.ayet_callbacks
+    where transaction_id = 'r-' || p_transaction_id
+      and event_type = 'chargeback'
+      and status = 'reversal_orphan'
+    for update;
+  if found then
+    delete from public.ayet_callbacks where id = v_orphan.id;
+    v_replay_result := public.ayet_apply_callback(
+      v_orphan.transaction_id, v_orphan.external_identifier, 'chargeback', true,
+      v_orphan.payout_usd, v_orphan.currency_amount, v_orphan.currency_identifier,
+      v_orphan.offer_id, null, v_orphan.payload
+    );
+    return jsonb_build_object(
+      'status','credited_with_prior_reversal',
+      'user_id',v_user,
+      'credited_cents',v_cents,
+      'reversal_result',v_replay_result
+    );
+  end if;
+
   return jsonb_build_object('status','credited','user_id',v_user,'credited_cents',v_cents);
 end $$;
 revoke all on function public.ayet_apply_callback(text,text,text,boolean,numeric,numeric,text,text,text,jsonb) from public, anon, authenticated;
