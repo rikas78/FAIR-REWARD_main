@@ -23,6 +23,13 @@ type Activity = FairRewardActivity & {
   trackingLink: string | null;
 };
 
+type PlannedTask = {
+  id: string;
+  activityId: string;
+  title: string;
+  date: string;
+};
+
 const filters: Filter[] = [
   "Tutte",
   "Sondaggi",
@@ -268,6 +275,11 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState("");
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [walletCents, setWalletCents] = useState(0);
+  const [activeSection, setActiveSection] = useState<"Home" | "Attività" | "Play" | "Planner" | "Wallet">("Home");
+  const [plannerDate, setPlannerDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [plannerOfferId, setPlannerOfferId] = useState("");
+  const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
+  const [plannerLoaded, setPlannerLoaded] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -331,6 +343,46 @@ export default function Home() {
     };
   }, []);
 
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("fairreward-planned-tasks");
+      if (saved) {
+        const parsed: unknown = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setPlannedTasks(parsed.filter((item): item is PlannedTask =>
+            item && typeof item.id === "string" &&
+            typeof item.activityId === "string" &&
+            typeof item.title === "string" &&
+            typeof item.date === "string"
+          ));
+        }
+      }
+    } catch {
+      // Ignore malformed local planner data; the app remains usable.
+    } finally {
+      setPlannerLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!plannerLoaded) return;
+    window.localStorage.setItem("fairreward-planned-tasks", JSON.stringify(plannedTasks));
+  }, [plannedTasks, plannerLoaded]);
+
+  function addPlannedTask() {
+    const activity = activities.find((item) => item.id === plannerOfferId);
+    if (!activity || !plannerDate) return;
+    setPlannedTasks((current) => [
+      ...current,
+      {
+        id: `${Date.now()}-${activity.id}`,
+        activityId: activity.id,
+        title: activity.title,
+        date: plannerDate,
+      },
+    ]);
+  }
 
   async function loadWallet(userId: string) {
     const { data, error } = await supabase
@@ -548,8 +600,14 @@ export default function Home() {
               (item, index) => (
                 <button
                   key={t(item)}
+                  onClick={() => {
+                    setActiveSection(item as "Home" | "Attività" | "Play" | "Planner" | "Wallet");
+                    setSelectedActivity(null);
+                    setMenuOpen(false);
+                  }}
+                  aria-current={activeSection === item ? "page" : undefined}
                   className={`shrink-0 rounded-xl border px-5 py-2.5 text-sm font-bold ${
-                    index === 0
+                    activeSection === item
                       ? "border-fuchsia-400 bg-fuchsia-500"
                       : "border-cyan-400/15 bg-white/[0.025] text-white/75"
                   }`}
@@ -680,6 +738,8 @@ export default function Home() {
         </div>
       )}
 
+      {activeSection === "Home" && (
+      <>
       <section className="mx-auto max-w-7xl px-4 pb-5 pt-5">
         <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-fuchsia-500/30 bg-[#07132b]">
           <img
@@ -841,6 +901,10 @@ export default function Home() {
         </div>
       </section>
 
+      </>
+      )}
+
+      {(activeSection === "Home" || activeSection === "Attività" || activeSection === "Play") && (
       <section className="mx-auto max-w-7xl px-4 pb-6">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {filters.map((item) => (
@@ -858,7 +922,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+      )}
 
+      {(activeSection === "Home" || activeSection === "Attività" || activeSection === "Play") && (
       <section
         id="inventory"
         className="mx-auto max-w-7xl px-4 pb-28"
@@ -1052,6 +1118,74 @@ export default function Home() {
           </div>
         )}
       </section>
+      )}
+
+      {activeSection === "Planner" && (
+        <section className="mx-auto max-w-7xl px-4 pb-28 pt-8">
+          <div className="mb-6">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300/70">FAIRREWARD · PLANNER</p>
+            <h1 className="mt-2 text-3xl font-black">Pianifica le tue attività</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">Aggiungi le offerte disponibili ai giorni in cui vuoi provarle. Il planner viene salvato su questo dispositivo e non conferma il completamento né il pagamento di un'offerta.</p>
+          </div>
+          <div className="grid gap-4 rounded-3xl border border-cyan-400/20 bg-[#06132b] p-5 sm:grid-cols-[1fr_190px_auto] sm:items-end">
+            <label className="block text-sm font-bold text-white/75">
+              Offerta
+              <select value={plannerOfferId} onChange={(event) => setPlannerOfferId(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white">
+                <option value="">Seleziona un'offerta</option>
+                {activities.map((activity) => <option key={activity.id} value={activity.id}>{activity.title}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-bold text-white/75">
+              Giorno
+              <input type="date" value={plannerDate} onChange={(event) => setPlannerDate(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white" />
+            </label>
+            <button type="button" onClick={addPlannedTask} disabled={!plannerOfferId || !plannerDate} className="rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40">Aggiungi al planner</button>
+          </div>
+          <div className="mt-6">
+            <h2 className="mb-3 text-xl font-black">Le tue attività pianificate</h2>
+            {plannedTasks.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-[#06132b] p-6 text-sm text-white/55">Non hai ancora pianificato attività. Seleziona un'offerta e una data qui sopra.</div>
+            ) : (
+              <div className="grid gap-3">
+                {[...plannedTasks].sort((a, b) => a.date.localeCompare(b.date)).map((task) => (
+                  <article key={task.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#06132b] p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="font-bold">{task.title}</div>
+                      <div className="mt-1 text-xs text-cyan-200/70">{new Date(task.date + "T12:00:00").toLocaleDateString(language === "it" ? "it-IT" : "en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</div>
+                    </div>
+                    <button type="button" onClick={() => setPlannedTasks((current) => current.filter((item) => item.id !== task.id))} className="rounded-xl border border-white/10 px-4 py-2 text-xs font-black text-white/65 hover:bg-white/[0.06]">Rimuovi</button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeSection === "Wallet" && (
+        <section className="mx-auto max-w-7xl px-4 pb-28 pt-8">
+          <div className="mb-6">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-fuchsia-300/70">FAIRREWARD · WALLET</p>
+            <h1 className="mt-2 text-3xl font-black">Il tuo Wallet</h1>
+            <p className="mt-2 text-sm leading-6 text-white/60">Qui trovi il saldo associato al tuo account FairReward.</p>
+          </div>
+          <div className="max-w-xl rounded-3xl border border-fuchsia-400/25 bg-[#06132b] p-6">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-white/45">Saldo disponibile</div>
+            {authEmail ? (
+              <>
+                <div className="mt-2 text-5xl font-black text-fuchsia-400">{walletLabel}</div>
+                <div className="mt-3 break-all text-sm text-white/50">{authEmail}</div>
+                <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/60">Il saldo mostrato è quello letto dal tuo account. Le conversioni vengono accreditate solo dopo la conferma valida del partner.</div>
+              </>
+            ) : (
+              <>
+                <div className="mt-3 text-sm text-white/60">Accedi per visualizzare il saldo del tuo account.</div>
+                <button type="button" onClick={() => setShowLogin(true)} className="mt-4 rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-black">Accedi</button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {selectedActivity && (
         <div
@@ -1287,8 +1421,14 @@ export default function Home() {
           ].map(([icon, label], index) => (
             <button
               key={label}
+              onClick={() => {
+                setActiveSection(label as "Home" | "Attività" | "Planner" | "Wallet");
+                setSelectedActivity(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              aria-current={activeSection === label ? "page" : undefined}
               className={`flex flex-col items-center gap-1 py-3 text-xs font-black ${
-                index === 0 ? "text-fuchsia-400" : "text-white/55"
+                activeSection === label ? "text-fuchsia-400" : "text-white/55"
               }`}
             >
               <span className="text-lg">{icon}</span>
