@@ -423,12 +423,29 @@ export default function Home() {
     }
   }
 
+  async function linkExternalIdentity(accessToken: string) {
+    try {
+      const response = await fetch("/api/ayet/link-identity", {
+        method: "POST",
+        headers: { Authorization: \`Bearer \${accessToken}\` },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        console.error("FairReward identity linking failed", data?.error ?? response.status);
+      }
+    } catch (error) {
+      console.error("FairReward identity linking request failed", error);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
     async function loadAuth() {
       const { data } = await supabase.auth.getSession();
-      const user = data.session?.user ?? null;
+      const session = data.session;
+      const user = session?.user ?? null;
 
       if (!active) return;
 
@@ -436,6 +453,7 @@ export default function Home() {
 
       if (user) {
         await loadWallet(user.id);
+        if (session?.access_token) await linkExternalIdentity(session.access_token);
       } else {
         setWalletCents(0);
       }
@@ -453,6 +471,7 @@ export default function Home() {
 
         if (user) {
           await loadWallet(user.id);
+          if (session?.access_token) await linkExternalIdentity(session.access_token);
         } else {
           setWalletCents(0);
         }
@@ -479,6 +498,7 @@ export default function Home() {
     } else if (data.user) {
       setAuthEmail(data.user.email ?? null);
       await loadWallet(data.user.id);
+      if (data.session?.access_token) await linkExternalIdentity(data.session.access_token);
       setShowLogin(false);
       setLoginPassword("");
     }
