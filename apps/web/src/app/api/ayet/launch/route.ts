@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const AYeT_ADSLOT_ID = "29639";
 const AYeT_BASE_URL = "https://www.ayetstudios.com";
@@ -31,19 +32,6 @@ async function getDevelopmentIp() {
   return data.ip;
 }
 
-function resolveExternalIdentifier(request: NextRequest) {
-  const existing = request.cookies.get("fr_ext_id")?.value;
-
-  if (existing && /^fr_[0-9a-f-]{36}$/.test(existing)) {
-    return { externalIdentifier: existing, setCookie: false };
-  }
-
-  return {
-    externalIdentifier: `fr_${crypto.randomUUID()}`,
-    setCookie: true,
-  };
-}
-
 export async function GET(request: NextRequest) {
   try {
     const offerId = request.nextUrl.searchParams.get("offerId");
@@ -55,8 +43,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const identity = resolveExternalIdentifier(request);
-    const externalIdentifier = identity.externalIdentifier;
+    const clickId = request.nextUrl.searchParams.get("click") ?? "";
+    if (!/^[0-9a-f-]{36}$/i.test(clickId)) {
+      return NextResponse.json({ error: "login_required", message: "Accedi prima di iniziare un'attività." }, { status: 401 });
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: click, error: clickError } = await supabase
+      .from("ayet_clicks")
+      .select("click_id,user_id,offer_id,expires_at")
+      .eq("click_id", clickId)
+      .eq("offer_id", offerId)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+    if (clickError || !click) {
+      return NextResponse.json({ error: "invalid_or_expired_click" }, { status: 403 });
+    }
+    const externalIdentifier = click.user_id;
 
     let ip = getClientIp(request);
 
@@ -151,22 +154,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const clickId = `frdev_${crypto.randomUUID()}`;
-    trackingUrl.searchParams.set("custom_1", clickId);
+    trackingUrl.searchParams.set("custom_1", click.click_id);
 
     const result = NextResponse.redirect(trackingUrl.toString(), {
       status: 307,
     });
-
-    if (identity.setCookie) {
-      result.cookies.set("fr_ext_id", externalIdentifier, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
-    }
 
     return result;
   } catch (error) {
