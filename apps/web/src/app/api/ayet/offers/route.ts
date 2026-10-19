@@ -177,16 +177,8 @@ export async function GET(request: NextRequest) {
       },
     );
 
-    if (identity.setCookie) {
-      result.cookies.set("fr_ext_id", externalIdentifier, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365,
-      });
-    }
-
+    // Inventory loading must not create/overwrite the tracking cookie.
+    // The identity is persisted by the offer launch or authenticated identity-link route.
     return result;
   } catch (error) {
     return NextResponse.json(
