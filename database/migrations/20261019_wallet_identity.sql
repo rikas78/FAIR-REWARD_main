@@ -12,6 +12,15 @@ create index if not exists user_external_identifiers_user_id_idx
 alter table public.user_reward_ledger
   add column if not exists wallet_applied_at timestamptz;
 
+-- This FairReward ayeT placement is configured to pay users in EUR.
+update public.user_reward_ledger
+   set currency_identifier = 'EUR'
+ where currency_identifier is null or btrim(currency_identifier) = '';
+
+update public.ayet_conversions
+   set currency_identifier = 'EUR'
+ where currency_identifier is null or btrim(currency_identifier) = '';
+
 create unique index if not exists wallets_user_id_uidx
   on public.wallets(user_id);
 
