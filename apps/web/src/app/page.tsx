@@ -30,6 +30,9 @@ type PlannedTask = {
   date: string;
 };
 
+type StartedActivity = { id: string; activityId: string; offerId: string; title: string; startedAt: string; status: string };
+type ProviderActivity = { transactionId: string; title: string; status: string; amount: number; currency: string; createdAt: string | null };
+
 const filters: Filter[] = [
   "Tutte",
   "Sondaggi",
@@ -275,7 +278,10 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState("");
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [walletCents, setWalletCents] = useState(0);
-  const [activeSection, setActiveSection] = useState<"Home" | "Attività" | "Play" | "Planner" | "Wallet">("Home");
+  const [activeSection, setActiveSection] = useState<"Home" | "Attività" | "Play" | "Planner" | "Wallet" | "Le mie attività">("Home");
+  const [startedActivities, setStartedActivities] = useState<StartedActivity[]>([]);
+  const [providerActivities, setProviderActivities] = useState<ProviderActivity[]>([]);
+  const [loadingMyActivities, setLoadingMyActivities] = useState(false);
   const [plannerDate, setPlannerDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [plannerOfferId, setPlannerOfferId] = useState("");
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
@@ -373,6 +379,23 @@ export default function Home() {
       // Keep the planner usable if browser storage is unavailable.
     }
   }, [plannedTasks, plannerLoaded]);
+
+
+  useEffect(() => {
+    if (activeSection !== "Le mie attività") return;
+    let cancelled = false;
+    setLoadingMyActivities(true);
+    try {
+      const saved = window.localStorage.getItem("fairreward-started-activities");
+      const parsed: unknown = saved ? JSON.parse(saved) : [];
+      if (!cancelled && Array.isArray(parsed)) setStartedActivities(parsed.filter((item): item is StartedActivity => item && typeof item.id === "string" && typeof item.title === "string" && typeof item.offerId === "string" && typeof item.startedAt === "string"));
+    } catch { if (!cancelled) setStartedActivities([]); }
+    fetch("/api/ayet/my-activities", { cache: "no-store" })
+      .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error("Unable to read provider conversions"); if (!cancelled) setProviderActivities(Array.isArray(data.activities) ? data.activities : []); })
+      .catch(() => { if (!cancelled) setProviderActivities([]); })
+      .finally(() => { if (!cancelled) setLoadingMyActivities(false); });
+    return () => { cancelled = true; };
+  }, [activeSection]);
 
   function addPlannedTask() {
     const activity = activities.find((item) => item.id === plannerOfferId);
@@ -555,11 +578,16 @@ export default function Home() {
 
   function launchActivity(activity: Activity) {
     if (!activity.publish.ready) return;
-
+    const item: StartedActivity = { id: `${activity.id}-${Date.now()}`, activityId: activity.id, offerId: activity.offerId, title: activity.title, startedAt: new Date().toISOString(), status: "Avviata · in attesa di conferma" };
+    try {
+      const saved = window.localStorage.getItem("fairreward-started-activities");
+      const current: StartedActivity[] = saved ? JSON.parse(saved) : [];
+      const next = [item, ...current.filter((entry) => entry.offerId !== activity.offerId)].slice(0, 100);
+      window.localStorage.setItem("fairreward-started-activities", JSON.stringify(next));
+      setStartedActivities(next);
+    } catch { /* Do not block the provider redirect if storage is unavailable. */ }
     setLaunchingOffer(activity.id);
-    window.location.assign(
-      `/api/ayet/launch?offerId=${encodeURIComponent(activity.offerId)}`,
-    );
+    window.location.assign(`/api/ayet/launch?offerId=${encodeURIComponent(activity.offerId)}`);
   }
 
   return (
@@ -730,7 +758,12 @@ export default function Home() {
                 (item) => (
                   <button
                     key={item}
-                    onClick={() => setMenuOpen(false)}
+                    onClick={() => {
+                      if (item === "Le mie attività") setActiveSection("Le mie attività");
+                      else if (item === "Calendario") setActiveSection("Planner");
+                      else if (item === "Profilo") setActiveSection("Wallet");
+                      setMenuOpen(false);
+                    }}
                     className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm font-bold text-white/80"
                   >
                     {t(item)}
@@ -793,8 +826,8 @@ export default function Home() {
               aria-pressed={timeEnabled}
               className={`rounded-full border px-3 py-2 text-[10px] font-black ${
                 timeEnabled
-                  ? "border-cyan-300 bg-cyan-400 text-[#06101f]"
-                  : "border-white/10 bg-white/[0.04] text-white/45"
+                  ? "border-emerald-300 bg-emerald-500 text-white"
+                  : "border-red-400/60 bg-red-600 text-white"
               }`}
             >
               {timeEnabled ? "ON" : "OFF"}
@@ -830,8 +863,8 @@ export default function Home() {
               aria-pressed={goalEnabled}
               className={`rounded-full border px-3 py-2 text-[10px] font-black ${
                 goalEnabled
-                  ? "border-fuchsia-300 bg-fuchsia-500 text-white"
-                  : "border-white/10 bg-white/[0.04] text-white/45"
+                  ? "border-emerald-300 bg-emerald-500 text-white"
+                  : "border-red-400/60 bg-red-600 text-white"
               }`}
             >
               {goalEnabled ? "ON" : "OFF"}
@@ -1122,6 +1155,34 @@ export default function Home() {
           </div>
         )}
       </section>
+      )}
+
+
+      {activeSection === "Le mie attività" && (
+        <section className="mx-auto max-w-7xl px-4 pb-28 pt-8">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300/70">FAIRREWARD · STORICO</p>
+          <h1 className="mt-2 text-3xl font-black">Le mie attività</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">Qui trovi le offerte che hai avviato su questo dispositivo e le conversioni comunicate da ayeT. L'avvio non equivale a completamento o pagamento.</p>
+          {loadingMyActivities && <div className="mt-5 rounded-2xl border border-white/10 bg-[#06132b] p-4 text-sm text-white/60">Aggiornamento dello storico…</div>}
+          <div className="mt-5 grid gap-3">
+            {providerActivities.map((item) => (
+              <article key={item.transactionId} className="rounded-2xl border border-emerald-400/20 bg-[#06132b] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div className="font-bold">{item.title}</div><span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-black text-emerald-300">{item.status}</span></div>
+                <div className="mt-2 text-sm text-white/55">Conversione registrata dal partner{item.createdAt ? " · " + new Date(item.createdAt).toLocaleString(language === "it" ? "it-IT" : "en-GB") : ""}</div>
+                <div className="mt-2 text-sm font-bold text-emerald-300">Importo comunicato: {item.amount.toLocaleString(language === "it" ? "it-IT" : "en-GB", { maximumFractionDigits: 2 })} {item.currency}</div>
+              </article>
+            ))}
+            {startedActivities.map((item) => (
+              <article key={item.id} className="rounded-2xl border border-cyan-400/20 bg-[#06132b] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div className="font-bold">{item.title}</div><span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-black text-amber-300">{item.status}</span></div>
+                <div className="mt-2 text-sm text-white/55">Avviata il {new Date(item.startedAt).toLocaleString(language === "it" ? "it-IT" : "en-GB")}. In attesa di conferma del partner.</div>
+              </article>
+            ))}
+            {!loadingMyActivities && providerActivities.length === 0 && startedActivities.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-[#06132b] p-6 text-sm leading-6 text-white/60">Non risultano attività registrate. Se hai già svolto un'offerta in precedenza, potrebbe non essere stata tracciata o il partner potrebbe non aver ancora inviato la conversione: non la segniamo come completata senza conferma.</div>
+            )}
+          </div>
+        </section>
       )}
 
       {activeSection === "Planner" && (
