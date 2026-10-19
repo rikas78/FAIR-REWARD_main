@@ -20,15 +20,20 @@ function verifySignature(raw: string, signature: string | null, secret: string |
 
 function amount(params: URLSearchParams, key: string): number | null {
   const raw = params.get(key);
-  if (raw == null || raw.trim() === "") return 0;
+  if (raw == null || raw.trim() === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
 
 async function handle(request: NextRequest) {
-  const params = request.method === "GET"
-    ? new URLSearchParams(request.nextUrl.searchParams)
-    : new URLSearchParams(await request.text());
+  // ayeT documents the HMAC over all callback request parameters. Include
+  // query-string and form-body parameters so GET and POST callbacks are treated consistently.
+  const params = new URLSearchParams(request.nextUrl.searchParams);
+  if (request.method === "POST") {
+    const body = await request.text();
+    const bodyParams = new URLSearchParams(body);
+    for (const [key, value] of bodyParams.entries()) params.append(key, value);
+  }
 
   const callbackType = (params.get("callback_type") ?? "").trim().toLowerCase();
   if (["optional", "installation", "iap", "iaa"].includes(callbackType)) {
