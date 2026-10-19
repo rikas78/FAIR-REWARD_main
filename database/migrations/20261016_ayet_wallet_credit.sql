@@ -92,7 +92,6 @@ begin
     select * into v_original from public.ayet_callbacks
       where transaction_id = v_base and event_type = 'conversion' for update;
     if not found then
-      insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,reason,payload)
       insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,reason,requested_reversal_cents,unrecovered_cents,payload)
       values(p_transaction_id,'chargeback',p_external_identifier,v_user,v_click,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'reversal_orphan','original_not_found',floor(abs(p_currency_amount)*100)::bigint,floor(abs(p_currency_amount)*100)::bigint,coalesce(p_payload,'{}'::jsonb));
       return jsonb_build_object('status','reversal_orphan');
@@ -113,8 +112,10 @@ begin
              lifetime_earned_cents = greatest(0,lifetime_earned_cents-v_take),
              updated_at=now()
        where user_id = v_original.user_id;
-      insert into public.wallet_transactions(user_id,type,amount_cents,currency,reference_type,reference_id,description)
-      values(v_original.user_id,'reversal',-v_take,'EUR','ayet_chargeback',p_transaction_id,'ayeT reversal');
+      if v_take > 0 then
+        insert into public.wallet_transactions(user_id,type,amount_cents,currency,reference_type,reference_id,description)
+        values(v_original.user_id,'reversal',-v_take,'EUR','ayet_chargeback',p_transaction_id,'ayeT reversal');
+      end if;
       update public.ayet_callbacks
          set reversed_cents = reversed_cents+v_requested,
              unrecovered_cents = unrecovered_cents+v_shortfall
