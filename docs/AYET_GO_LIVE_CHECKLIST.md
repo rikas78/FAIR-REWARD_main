@@ -25,7 +25,7 @@ Do not enable real wallet payouts until every required staging check below has e
 - [ ] **Reversal with available balance:** the available balance decreases by the reversed amount.
 - [ ] **Reversal after user withdrawal / insufficient balance:** only available funds are removed; the remainder is recorded in `unrecovered_cents` for investigation and must not be treated as recovered.
 - [ ] **Duplicate reversal:** resend the same reversal transaction ID; no second deduction.
-- [ ] **Reversal before original conversion:** the callback is stored as `reversal_orphan`. This requires operational reconciliation; do not mark it resolved automatically.
+- [ ] **Reversal before original conversion:** the callback is stored as `reversal_orphan`; when the matching valid conversion later arrives, the SQL function replays the reversal in the same transaction. Verify the final wallet balance and both callback records. If the conversion is rejected, the orphan remains for manual review.
 - [ ] **CPE milestone:** verify that each paid milestone has its own unique callback transaction ID and only the callback's `currency_amount` is credited—not the campaign's top-level potential total.
 - [ ] **End-to-end reconciliation:** compare Offerwall API `payout`, callback `currency_amount`, callback `payout_usd`, AdSlot conversion rate, and the resulting wallet/ledger amounts.
 
