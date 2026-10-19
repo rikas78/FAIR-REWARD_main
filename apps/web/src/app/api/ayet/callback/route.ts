@@ -48,6 +48,11 @@ async function handle(request: NextRequest) {
     }
   }
 
+  // ayeT sandbox callbacks are for testing only and must never touch the real wallet.
+  if (params.get("is_sandbox") === "1") {
+    return NextResponse.json({ ok: true, ignored: true, reason: "sandbox_callback" });
+  }
+
   const transactionId = params.get("transaction_id")?.trim();
   const externalIdentifier = params.get("external_identifier")?.trim();
   if (!transactionId || !externalIdentifier) {
