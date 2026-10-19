@@ -367,7 +367,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!plannerLoaded) return;
-    window.localStorage.setItem("fairreward-planned-tasks", JSON.stringify(plannedTasks));
+    try {
+      window.localStorage.setItem("fairreward-planned-tasks", JSON.stringify(plannedTasks));
+    } catch {
+      // Keep the planner usable if browser storage is unavailable.
+    }
   }, [plannedTasks, plannerLoaded]);
 
   function addPlannedTask() {
@@ -597,7 +601,7 @@ export default function Home() {
         <div className="border-t border-cyan-400/10 bg-[#031029]">
           <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 py-2">
             {["Home", "Attività", "Play", "Planner", "Wallet"].map(
-              (item, index) => (
+              (item) => (
                 <button
                   key={t(item)}
                   onClick={() => {
@@ -1418,7 +1422,7 @@ export default function Home() {
             ["◎", "Attività"],
             ["▦", "Planner"],
             ["▢", "Wallet"],
-          ].map(([icon, label], index) => (
+          ].map(([icon, label]) => (
             <button
               key={label}
               onClick={() => {
