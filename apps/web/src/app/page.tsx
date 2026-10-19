@@ -430,7 +430,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/ayet/link-identity", {
         method: "POST",
-        headers: { Authorization: \`Bearer \${accessToken}\` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         cache: "no-store",
       });
       if (!response.ok) {
