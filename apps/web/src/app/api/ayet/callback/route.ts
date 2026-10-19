@@ -45,6 +45,11 @@ async function handleCallback(request: NextRequest) {
       ? new URLSearchParams(request.nextUrl.searchParams)
       : new URLSearchParams(await request.text());
 
+  // Sandbox callbacks must never create production credits.
+  if (params.get("is_sandbox") === "1" || params.get("is_sandbox")?.toLowerCase() === "true") {
+    return NextResponse.json({ ok: true, ignored: true, reason: "sandbox" });
+  }
+
   const transactionId = params.get("transaction_id")?.trim();
   const externalIdentifier = params.get("external_identifier")?.trim();
 
@@ -85,7 +90,7 @@ async function handleCallback(request: NextRequest) {
     request.headers.get("x-ayetstudios-security-hash") ??
     params.get("security_hash");
 
-  if (process.env.AYET_CALLBACK_HMAC_REQUIRED === "true") {
+  if (process.env.NODE_ENV === "production" || process.env.AYET_CALLBACK_HMAC_REQUIRED === "true") {
     if (!verifySignature(canonicalizeParams(params), signature, apiKey)) {
       return NextResponse.json(
         { ok: false, error: "invalid_signature" },
@@ -118,7 +123,7 @@ async function handleCallback(request: NextRequest) {
   const currencyIdentifier =
     params.get("currency_identifier") ??
     process.env.AYET_CURRENCY_IDENTIFIER ??
-    "";
+    "EUR";
   const metadata = Object.fromEntries(params.entries());
   const supabase = await getSupabaseServerClient();
 
@@ -134,7 +139,7 @@ async function handleCallback(request: NextRequest) {
         currency_identifier: currencyIdentifier,
         raw_payload: metadata,
       },
-      { onConflict: "transaction_id" },
+      { onConflict: "transaction_id", ignoreDuplicates: true },
     );
 
   if (conversionError) {
@@ -231,6 +236,14 @@ async function handleCallback(request: NextRequest) {
         { status: 500 },
       );
     }
+  }
+
+  const { error: walletError } = await supabase.rpc("reconcile_ayet_wallet", {
+    p_external_identifier: externalIdentifier,
+  });
+  if (walletError) {
+    console.error("ayeT wallet reconciliation failed", walletError);
+    return NextResponse.json({ ok: false, error: "wallet_reconciliation_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
