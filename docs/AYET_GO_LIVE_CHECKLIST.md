@@ -20,7 +20,7 @@ Do not enable real wallet payouts until every required staging check below has e
 - [ ] **Missing/invalid amount:** callback is rejected and nothing is credited.
 - [ ] **Wrong currency:** callback is recorded as rejected; no wallet credit.
 - [ ] **Unknown user / missing click / wrong user click:** callback is recorded for investigation; no wallet credit.
-- [ ] **Sandbox callback:** `is_sandbox=1` must not create real wallet credits. Confirm the configured sandbox routing/guard before running this test; do not assume the current SQL function itself filters sandbox events.
+- [ ] **Sandbox callback:** `is_sandbox=1` must not create real wallet credits. The callback route now returns HTTP 200 with `ignored: true` before invoking the wallet SQL function; verify this in staging.
 - [ ] **Reversal with pending balance:** the pending balance decreases by the reversed amount.
 - [ ] **Reversal with available balance:** the available balance decreases by the reversed amount.
 - [ ] **Reversal after user withdrawal / insufficient balance:** only available funds are removed; the remainder is recorded in `unrecovered_cents` for investigation and must not be treated as recovered.
