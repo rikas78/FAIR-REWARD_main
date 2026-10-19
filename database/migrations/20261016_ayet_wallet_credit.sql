@@ -32,9 +32,16 @@ create table if not exists public.ayet_callbacks (
   reason text,
   credited_cents bigint not null default 0 check (credited_cents >= 0),
   reversed_cents bigint not null default 0 check (reversed_cents >= 0),
+  unrecovered_cents bigint not null default 0 check (unrecovered_cents >= 0),
+  requested_reversal_cents bigint not null default 0 check (requested_reversal_cents >= 0),
   payload jsonb not null default '{}'::jsonb,
   received_at timestamptz not null default now()
 );
+
+-- Safe for environments where the table was created by an earlier preview migration.
+alter table public.ayet_callbacks add column if not exists unrecovered_cents bigint not null default 0 check (unrecovered_cents >= 0);
+alter table public.ayet_callbacks add column if not exists requested_reversal_cents bigint not null default 0 check (requested_reversal_cents >= 0);
+
 alter table public.ayet_settings enable row level security;
 alter table public.ayet_clicks enable row level security;
 alter table public.ayet_callbacks enable row level security;
@@ -57,6 +64,8 @@ declare
   v_available bigint;
   v_from_pending bigint;
   v_from_available bigint;
+  v_requested bigint;
+  v_shortfall bigint;
   v_base text;
 begin
   if coalesce(btrim(p_transaction_id),'') = '' or coalesce(btrim(p_external_identifier),'') = '' then
@@ -84,16 +93,20 @@ begin
       where transaction_id = v_base and event_type = 'conversion' for update;
     if not found then
       insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,reason,payload)
-      values(p_transaction_id,'chargeback',p_external_identifier,v_user,v_click,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'reversal_orphan','original_not_found',coalesce(p_payload,'{}'::jsonb));
+      insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,reason,requested_reversal_cents,unrecovered_cents,payload)
+      values(p_transaction_id,'chargeback',p_external_identifier,v_user,v_click,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'reversal_orphan','original_not_found',floor(abs(p_currency_amount)*100)::bigint,floor(abs(p_currency_amount)*100)::bigint,coalesce(p_payload,'{}'::jsonb));
       return jsonb_build_object('status','reversal_orphan');
     end if;
-    v_cents := least(floor(abs(p_currency_amount)*100)::bigint, greatest(0,v_original.credited_cents-v_original.reversed_cents));
-    if v_cents > 0 then
+    v_requested := least(floor(abs(p_currency_amount)*100)::bigint, greatest(0,v_original.credited_cents-v_original.reversed_cents));
+    v_take := 0;
+    v_shortfall := 0;
+    if v_requested > 0 then
       select pending_cents, available_cents into v_pending, v_available
         from public.wallets where user_id = v_original.user_id for update;
-      v_from_pending := least(coalesce(v_pending,0), v_cents);
-      v_from_available := least(coalesce(v_available,0), v_cents-v_from_pending);
+      v_from_pending := least(coalesce(v_pending,0), v_requested);
+      v_from_available := least(coalesce(v_available,0), v_requested-v_from_pending);
       v_take := v_from_pending + v_from_available;
+      v_shortfall := v_requested - v_take;
       update public.wallets
          set pending_cents = pending_cents-v_from_pending,
              available_cents = available_cents-v_from_available,
@@ -102,12 +115,17 @@ begin
        where user_id = v_original.user_id;
       insert into public.wallet_transactions(user_id,type,amount_cents,currency,reference_type,reference_id,description)
       values(v_original.user_id,'reversal',-v_take,'EUR','ayet_chargeback',p_transaction_id,'ayeT reversal');
-      update public.ayet_callbacks set reversed_cents = reversed_cents+v_take where transaction_id=v_base;
-      v_cents := v_take;
+      update public.ayet_callbacks
+         set reversed_cents = reversed_cents+v_requested,
+             unrecovered_cents = unrecovered_cents+v_shortfall
+       where transaction_id=v_base;
     end if;
-    insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,credited_cents,payload)
-    values(p_transaction_id,'chargeback',p_external_identifier,v_original.user_id,v_original.click_id,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,'reversal_applied',v_cents,coalesce(p_payload,'{}'::jsonb));
-    return jsonb_build_object('status','reversal_applied','reversed_cents',v_cents);
+    insert into public.ayet_callbacks(transaction_id,event_type,external_identifier,user_id,click_id,offer_id,currency_identifier,currency_amount,payout_usd,status,credited_cents,reversed_cents,unrecovered_cents,requested_reversal_cents,payload)
+    values(p_transaction_id,'chargeback',p_external_identifier,v_original.user_id,v_original.click_id,p_offer_id,p_currency_identifier,p_currency_amount,p_payout_usd,
+      case when v_shortfall > 0 then 'reversal_partial_recovery' else 'reversal_applied' end,
+      v_take,v_requested,v_shortfall,v_requested,coalesce(p_payload,'{}'::jsonb));
+    return jsonb_build_object('status',case when v_shortfall > 0 then 'reversal_partial_recovery' else 'reversal_applied' end,
+      'requested_reversal_cents',v_requested,'recovered_cents',v_take,'unrecovered_cents',v_shortfall);
   end if;
 
   if v_user is null then
