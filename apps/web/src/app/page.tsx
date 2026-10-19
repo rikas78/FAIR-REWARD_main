@@ -274,6 +274,9 @@ export default function Home() {
     null,
   );
   const [showLogin, setShowLogin] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authEmail, setAuthEmail] = useState<string | null>(null);
@@ -487,6 +490,28 @@ export default function Home() {
   async function login() {
     setAuthBusy(true);
     setAuthError(null);
+    setAuthMessage(null);
+
+    if (authMode === "register") {
+      const { data, error } = await supabase.auth.signUp({
+        email: loginEmail.trim(),
+        password: loginPassword,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) {
+        setAuthError(error.message);
+      } else if (data.session?.user) {
+        setAuthEmail(data.session.user.email ?? null);
+        await loadWallet(data.session.user.id);
+        await linkExternalIdentity(data.session.access_token);
+        setShowLogin(false);
+        setLoginPassword("");
+      } else if (data.user) {
+        setAuthMessage("Account creato. Controlla la tua email e conferma l’indirizzo prima di accedere.");
+      }
+      setAuthBusy(false);
+      return;
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail.trim(),
@@ -687,7 +712,7 @@ export default function Home() {
                   ACCOUNT FAIRREWARD
                 </div>
                 <h2 className="mt-2 text-2xl font-black">
-                  {authEmail ? t("Wallet") : t("Accedi")}
+                  {authEmail ? t("Wallet") : authMode === "register" ? "Crea account" : t("Accedi")}
                 </h2>
               </div>
 
@@ -735,18 +760,28 @@ export default function Home() {
                   className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
                 />
 
-                <input
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder={language === "en" ? "Password" : "Password"}
-                  type="password"
-                  autoComplete="current-password"
-                  className="mt-3 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
-                />
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    placeholder="Password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={authMode === "register" ? "new-password" : "current-password"}
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                  />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-xl border border-white/15 px-3 text-xs font-bold text-white/75">
+                    {showPassword ? "Nascondi" : "Mostra"}
+                  </button>
+                </div>
 
                 {authError && (
                   <div className="mt-3 rounded-xl border border-orange-400/30 bg-orange-400/[0.05] p-3 text-xs text-orange-200">
                     {authError}
+                  </div>
+                )}
+                {authMessage && (
+                  <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-400/[0.05] p-3 text-xs leading-5 text-emerald-200">
+                    {authMessage}
                   </div>
                 )}
 
@@ -756,7 +791,10 @@ export default function Home() {
                   onClick={login}
                   className="mt-4 w-full rounded-xl bg-fuchsia-500 px-5 py-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {authBusy ? t("ACCESSO…") : t("ACCEDI")}
+                  {authBusy ? "Attendi…" : authMode === "register" ? "CREA ACCOUNT" : t("ACCEDI")}
+                </button>
+                <button type="button" onClick={() => { setAuthMode((mode) => mode === "login" ? "register" : "login"); setAuthError(null); setAuthMessage(null); }} className="mt-3 w-full rounded-xl border border-white/10 px-5 py-3 text-xs font-bold text-white/75">
+                  {authMode === "register" ? "Hai già un account? Accedi" : "Non hai un account? Registrati"}
                 </button>
               </div>
             )}
