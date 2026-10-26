@@ -40,7 +40,7 @@ export type FairRewardActivity = {
   };
 
   requirements: {
-    paymentRequired: boolean;
+    paymentRequired: boolean | null;
     reservationRequired: boolean;
     platforms: string[];
     devices: string[];
@@ -92,6 +92,12 @@ function asNumber(value: unknown): number | null {
 
 function asBoolean(value: unknown) {
   return value === true || value === 1 || value === "1";
+}
+
+function asOptionalBoolean(value: unknown): boolean | null {
+  if (value === true || value === 1 || value === "1") return true;
+  if (value === false || value === 0 || value === "0") return false;
+  return null;
 }
 
 function asArray(value: unknown) {
@@ -199,7 +205,7 @@ export function normalizeAyeTOffer(
   const devices = asArray(offer.devices);
   const countries = asArray(offer.countries);
 
-  const paymentRequired = asBoolean(offer.payment_required);
+  const paymentRequired = asOptionalBoolean(offer.payment_required);
   const reservationRequired = asBoolean(offer.require_reservation);
 
   const instructionsBase = cleanText(
