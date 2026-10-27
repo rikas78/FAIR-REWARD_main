@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const AYeT_ADSLOT_ID = "29639";
+const AYeT_ADSLOT_ID = process.env.AYET_ADSLOT_ID || "29639";
 const AYeT_BASE_URL = "https://www.ayetstudios.com";
 
 function getClientIp(request: NextRequest) {
@@ -151,8 +151,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const clickId = `frdev_${crypto.randomUUID()}`;
-    trackingUrl.searchParams.set("custom_1", clickId);
+    // Keep the provider-side custom tracking value tied to the same stable
+    // FairReward identity used to request the offerwall and receive callbacks.
+    trackingUrl.searchParams.set("custom_1", externalIdentifier);
 
     const result = NextResponse.redirect(trackingUrl.toString(), {
       status: 307,
