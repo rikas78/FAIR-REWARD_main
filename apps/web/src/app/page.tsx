@@ -556,40 +556,63 @@ export default function Home() {
     const source =
       filter === "Tutte"
         ? activities
-        : activities.filter((activity) => activity.category === filter);
+        : activities.filter(
+            (activity) => activity.category === filter,
+          );
 
     let candidates = source;
 
-    // Un filtro tempo è un limite reale: mostra solo attività singole
-    // con durata effettiva nota. La finestra di conversione del provider
-    // non indica quanto tempo serve all'utente per completare l'attività.
     if (appliedTime != null) {
       const targetSeconds = Number(appliedTime) * 60;
-      candidates = candidates.filter((activity) => {
-        if (activity.timing.isMilestoneOrLongForm) return false;
-        const seconds = activity.timing.activityDurationSeconds;
-        return seconds != null && seconds <= targetSeconds;
-      });
+
+      // "5 minuti" is an approximate intent, not a hard upper limit.
+      // For normal activities use the normalized duration. For CPE/game
+      // campaigns use ayeT's provider conversion time as the closest
+      // available indication, while the card explicitly explains that
+      // the campaign is multi-step.
+      const toleranceSeconds = Math.max(120, targetSeconds * 0.75);
+
+      candidates = candidates
+        .filter((activity) => {
+          const seconds =
+            activity.timing.activityDurationSeconds ??
+            activity.timing.providerConversionSeconds;
+
+          return (
+            seconds != null &&
+            Math.abs(seconds - targetSeconds) <= toleranceSeconds
+          );
+        })
+        .sort((a, b) => {
+          const aSeconds =
+            a.timing.activityDurationSeconds ??
+            a.timing.providerConversionSeconds ??
+            Infinity;
+
+          const bSeconds =
+            b.timing.activityDurationSeconds ??
+            b.timing.providerConversionSeconds ??
+            Infinity;
+
+          return (
+            Math.abs(aSeconds - targetSeconds) -
+            Math.abs(bSeconds - targetSeconds)
+          );
+        });
     }
 
-    // "Fino a €X" limita la ricompensa mostrata per una singola attività.
-    // I massimali delle campagne a più obiettivi non sono confrontabili.
-    if (appliedGoal != null) {
-      candidates = candidates.filter((activity) =>
-        !activity.timing.isMilestoneOrLongForm &&
-        activity.reward != null &&
-        activity.reward > 0 &&
-        activity.reward <= Number(appliedGoal)
-      );
-    }
-
-    return candidates.sort((a, b) => {
-      if (appliedGoal != null) {
+    // Showing inventory must never hide real offers. The goal selector only
+    // affects ordering: show all offers, with matching single-step rewards first.
+    const rewarded = candidates
+      .filter((activity) => activity.reward != null && activity.reward > 0 && !activity.timing.isMilestoneOrLongForm)
+      .sort((a, b) => {
+        if (appliedGoal == null) return (b.reward ?? 0) - (a.reward ?? 0);
         return Math.abs((a.reward ?? 0) - Number(appliedGoal)) -
           Math.abs((b.reward ?? 0) - Number(appliedGoal));
-      }
-      return (b.reward ?? 0) - (a.reward ?? 0);
-    });
+      });
+    const rewardedIds = new Set(rewarded.map((activity) => activity.id));
+    const otherOffers = candidates.filter((activity) => !rewardedIds.has(activity.id));
+    return [...rewarded, ...otherOffers];
   }, [
     activities,
     filter,
@@ -1096,7 +1119,7 @@ export default function Home() {
                         </div>
 
                         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black text-white/70">
-                          {item.requirements.paymentRequired === true\n                            ? t("VERSAMENTO RICHIESTO")\n                            : item.requirements.paymentRequired === false\n                              ? t("NESSUN VERSAMENTO")\n                              : t("VERSAMENTO DA VERIFICARE")}
+                          {item.requirements.paymentRequired ? t("A PAGAMENTO") : t("GRATUITA")}
                         </div>
 
                       </div>
