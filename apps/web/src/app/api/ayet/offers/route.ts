@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isIP } from "node:net";
 import {
   normalizeAyeTOffers,
   type FairRewardActivity,
@@ -53,32 +54,52 @@ function resolveExternalIdentifier(request: NextRequest) {
   };
 }
 
-function getClientIp(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+function isPublicClientIp(value: string) {
+  const ip = value.trim().replace(/^\\[|\\]$/g, "");
+  const version = isIP(ip);
+  if (!version) return false;
 
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
+  if (version === 4) {
+    const octets = ip.split(".").map(Number);
+    const [a, b] = octets;
+    if (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 192 && b === 2) ||
+      (a === 198 && (b === 18 || b === 19 || b === 51)) ||
+      (a === 203 && b === 0)
+    ) return false;
+    return true;
+  }
 
-  return "";
+  const normalized = ip.toLowerCase();
+  return !(
+    normalized === "::" ||
+    normalized === "::1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    /^fe[89ab]/.test(normalized) ||
+    normalized.startsWith("2001:db8:")
+  );
 }
 
-async function getDevelopmentIp() {
-  const response = await fetch("https://api.ipify.org?format=json", {
-    cache: "no-store",
-  });
+function getClientIp(request: NextRequest) {
+  // Vercel's x-real-ip is the platform-provided client address.
+  // Prefer it over the forwarded chain, which may contain proxy entries.
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp && isPublicClientIp(realIp)) return realIp;
 
-  if (!response.ok) {
-    throw new Error("Unable to resolve development public IP");
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0].trim();
+    if (isPublicClientIp(first)) return first;
   }
 
-  const data = (await response.json()) as { ip?: string };
-
-  if (!data.ip) {
-    throw new Error("Development public IP missing");
-  }
-
-  return data.ip;
+  return "";
 }
 
 export async function GET(request: NextRequest) {
@@ -86,15 +107,14 @@ export async function GET(request: NextRequest) {
     const identity = resolveExternalIdentifier(request);
     const externalIdentifier = identity.externalIdentifier;
 
-    let ip = getClientIp(request);
-
-    if (!ip) {
-      ip = await getDevelopmentIp();
-    }
+    const ip = getClientIp(request);
 
     if (!ip) {
       return NextResponse.json(
-        { error: "Client IP is required for the server-side ayeT request." },
+        {
+          error: "A public client IP could not be resolved from the Vercel request headers.",
+          diagnostic: "missing_or_non_public_client_ip",
+        },
         { status: 400 },
       );
     }
