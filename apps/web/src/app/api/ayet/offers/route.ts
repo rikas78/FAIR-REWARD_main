@@ -115,6 +115,18 @@ export async function GET(request: NextRequest) {
     url.searchParams.set("offer_sorting", "ecpm");
     url.searchParams.set("include_mobile_offers", "true");
 
+    // Privacy-safe diagnostics: never log the visitor IP, cookie, or tracking identifiers.
+    console.info("[FairReward ayeT request]", {
+      hasClientIp: Boolean(ip),
+      forwardedForPresent: Boolean(request.headers.get("x-forwarded-for")),
+      forwardedForHops: (request.headers.get("x-forwarded-for") ?? "")
+        .split(",")
+        .filter(Boolean).length,
+      realIpHeaderPresent: Boolean(request.headers.get("x-real-ip")),
+      userAgentPresent: Boolean(userAgent),
+      language,
+    });
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -141,6 +153,15 @@ export async function GET(request: NextRequest) {
     const payload = JSON.parse(body) as {
       offers?: Array<Record<string, unknown>>;
     };
+    console.info("[FairReward ayeT response]", {
+      httpStatus: response.status,
+      providerStatus:
+        typeof (payload as { status?: unknown }).status === "string"
+          ? String((payload as { status?: unknown }).status)
+          : "missing",
+      rawOfferCount: Array.isArray(payload.offers) ? payload.offers.length : 0,
+    });
+
 
     const activities: FairRewardActivity[] = Array.isArray(payload.offers)
       ? normalizeAyeTOffers(payload.offers)
