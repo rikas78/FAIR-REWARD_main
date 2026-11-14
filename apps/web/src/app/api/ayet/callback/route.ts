@@ -116,6 +116,13 @@ async function handleCallback(request: NextRequest) {
     ? "chargeback"
     : callbackType || params.get("status") || params.get("event") || "conversion";
 
+  // ayeT can send a chargeback using the original conversion transaction_id.
+  // Keep the original conversion immutable and give the reversal its own
+  // deterministic event key across all financial tables.
+  const eventTransactionId = isChargeback
+    ? `${transactionId}:chargeback`
+    : transactionId;
+
   const effectivePayoutUsd = isChargeback ? -Math.abs(payoutUsd) : payoutUsd;
   const effectiveCurrencyAmount = isChargeback
     ? -Math.abs(currencyAmount)
@@ -131,7 +138,7 @@ async function handleCallback(request: NextRequest) {
     .from("ayet_conversions")
     .upsert(
       {
-        transaction_id: transactionId,
+        transaction_id: eventTransactionId,
         external_identifier: externalIdentifier,
         event_type: eventType,
         payout_usd: effectivePayoutUsd,
@@ -156,7 +163,7 @@ async function handleCallback(request: NextRequest) {
       .upsert(
         {
           external_identifier: externalIdentifier,
-          transaction_id: transactionId,
+          transaction_id: eventTransactionId,
           entry_type: "reversal",
           amount: -Math.abs(effectiveCurrencyAmount),
           currency_identifier: currencyIdentifier,
@@ -178,7 +185,7 @@ async function handleCallback(request: NextRequest) {
       .from("platform_revenue")
       .upsert(
         {
-          transaction_id: transactionId,
+          transaction_id: eventTransactionId,
           revenue_type: "chargeback",
           provider_payout_usd: -Math.abs(effectivePayoutUsd),
           metadata,
@@ -199,7 +206,7 @@ async function handleCallback(request: NextRequest) {
       .upsert(
         {
           external_identifier: externalIdentifier,
-          transaction_id: transactionId,
+          transaction_id: eventTransactionId,
           entry_type: "credit",
           amount: effectiveCurrencyAmount,
           currency_identifier: currencyIdentifier,
@@ -221,7 +228,7 @@ async function handleCallback(request: NextRequest) {
       .from("platform_revenue")
       .upsert(
         {
-          transaction_id: transactionId,
+          transaction_id: eventTransactionId,
           revenue_type: "provider_conversion",
           provider_payout_usd: effectivePayoutUsd,
           metadata,
