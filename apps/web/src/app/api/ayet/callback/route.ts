@@ -79,6 +79,7 @@ async function handleCallback(request: NextRequest) {
 
   const isChargeback =
     callbackType === "chargeback" ||
+    callbackType === "reversal" ||
     params.get("is_chargeback") === "1" ||
     eventHint === "chargeback" ||
     eventHint === "reversal" ||
