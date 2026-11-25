@@ -833,173 +833,73 @@ export default function Home() {
         </div>
       )}
 
+
       {activeSection === "Home" && (
-      <>
-      <section className="mx-auto max-w-7xl px-4 pb-5 pt-5">
-        <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-fuchsia-500/30 bg-[#07132b]">
-          <img
-            src="/images/fairreward-v2-reference.png"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-center opacity-85"
-          />
-
-          <div className="absolute inset-0 bg-gradient-to-r from-[#020a1d] via-[#020a1d]/55 to-[#020a1d]/10" />
-
-          <div className="relative z-10 flex min-h-[320px] max-w-xl flex-col justify-center px-6 py-9">
-            <div className="text-4xl font-black leading-[0.92] sm:text-6xl">
-              IL TUO TEMPO
-              <br />
-              <span className="text-fuchsia-500">HA VALORE</span>
-            </div>
-
-            <p className="mt-5 max-w-md text-sm leading-6 text-white/80">
-              Attività retribuite quando vuoi tu. Vedi prima le informazioni
-              disponibili e la ricompensa prevista.
-            </p>
-
-            <button
-              onClick={() =>
-                document
-                  .getElementById("inventory")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-              className="mt-6 w-fit rounded-2xl bg-gradient-to-r from-fuchsia-500 via-pink-500 to-yellow-400 px-6 py-3.5 text-sm font-black shadow-lg shadow-fuchsia-500/20"
-            >
-              Scopri le attività →
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-5 lg:grid-cols-2">
-        <div className="rounded-3xl border border-cyan-400/20 bg-[#06132b] p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl text-cyan-400">◷</span>
-              <span className="font-black">Quanto tempo hai?</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setTimeEnabled((value) => !value)}
-              aria-pressed={timeEnabled}
-              className={`rounded-full border px-3 py-2 text-[10px] font-black ${
-                timeEnabled
-                  ? "border-emerald-300 bg-emerald-500 text-white"
-                  : "border-red-400/60 bg-red-600 text-white"
-              }`}
-            >
-              {timeEnabled ? "ON" : "OFF"}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {["5", "10", "30"].map((value) => (
-              <button
-                key={value}
-                onClick={() => setTime(value)}
-                className={`rounded-xl border py-3 text-sm font-black ${
-                  time === value
-                    ? "border-fuchsia-400 bg-fuchsia-500 text-white"
-                    : "border-cyan-400/15 bg-white/[0.025] text-white/75"
-                }`}
-              >
-                {value} min
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-fuchsia-400/20 bg-[#06132b] p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl text-fuchsia-400">◎</span>
-              <span className="font-black">Quanto vuoi guadagnare?</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setGoalEnabled((value) => !value)}
-              aria-pressed={goalEnabled}
-              className={`rounded-full border px-3 py-2 text-[10px] font-black ${
-                goalEnabled
-                  ? "border-emerald-300 bg-emerald-500 text-white"
-                  : "border-red-400/60 bg-red-600 text-white"
-              }`}
-            >
-              {goalEnabled ? "ON" : "OFF"}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {["2", "5", "10"].map((value) => (
-              <button
-                key={value}
-                onClick={() => setGoal(value)}
-                className={`rounded-xl border py-3 text-xs font-black ${
-                  goal === value
-                    ? "border-fuchsia-400 bg-fuchsia-500 text-white"
-                    : "border-fuchsia-400/15 bg-white/[0.025] text-white/75"
-                }`}
-              >
-                Fino a € {value}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 rounded-3xl border border-white/10 bg-[#06132b] p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-bold text-white/70">
-                {pendingFilterChanges
-                  ? t("Hai modifiche ai filtri tempo/guadagno non ancora applicate.")
-                  : filtersApplied
-                    ? t("✓ Filtri tempo/guadagno applicati")
-                    : t("Le categorie si aggiornano subito. Usa i filtri solo per tempo e guadagno.")}
+        <section className="mx-auto max-w-7xl px-4 pb-28 pt-5">
+          <div className="relative overflow-hidden rounded-[28px] border border-fuchsia-500/25 bg-gradient-to-br from-[#14284b] via-[#09152e] to-[#25113b] p-6 sm:p-9">
+            <div className="absolute -right-10 -top-12 h-48 w-48 rounded-full bg-fuchsia-500/15 blur-3xl" />
+            <div className="relative max-w-xl">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-fuchsia-200/70">FAIRREWARD · OPPORTUNITÀ</p>
+              <h1 className="mt-3 text-3xl font-black leading-tight sm:text-5xl">{language === "it" ? "Il tuo tempo ha valore." : "Your time has value."}</h1>
+              <p className="mt-3 max-w-md text-sm leading-6 text-white/65">{language === "it" ? "Esplora giochi, sondaggi e attività. Scopri i dettagli e la ricompensa prima di iniziare." : "Explore games, surveys and activities. Review the details and reward before you start."}</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {[
+                  ["Sondaggi", language === "it" ? "Sondaggi" : "Surveys", "📋"],
+                  ["Giochi", language === "it" ? "Giochi" : "Games", "🎮"],
+                  ["Shopping", language === "it" ? "Shopping" : "Shopping", "🛍️"],
+                ].map(([cat,label,emoji]) => (
+                  <button key={cat} onClick={() => { setFilter(cat as Filter); setActiveSection(cat === "Giochi" ? "Play" : "Attività"); window.scrollTo({top:0,behavior:"smooth"}); }} className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 text-sm font-bold hover:bg-white/[0.12]">{emoji} {label}</button>
+                ))}
+                <button onClick={() => setActiveSection("Attività")} className="rounded-full bg-fuchsia-500 px-4 py-2 text-sm font-black">{language === "it" ? "Tutte le attività →" : "All activities →"}</button>
               </div>
-
-              {filtersApplied && rewardConfiguredCount === 0 && (
-                <div className="mt-2 text-xs leading-5 text-amber-100/70">
-                  {t("Nessuna ricompensa calcolabile per le offerte attualmente disponibili.")}
-                </div>
-              )}
-            </div>
-
-            <div className="flex shrink-0 gap-2">
-              <button
-                onClick={() => {
-                  setFilter("Tutte");
-                  setTime("10");
-                  setGoal("5");
-                  setTimeEnabled(false);
-                  setGoalEnabled(false);
-                  setAppliedTime(null);
-                  setAppliedGoal(null);
-                  setFiltersApplied(false);
-                }}
-                className="rounded-xl border border-white/10 px-4 py-3 text-xs font-black text-white/60 hover:bg-white/[0.06]"
-              >
-                {t("RESET FILTRI")}
-              </button>
-
-              <button
-                onClick={() => {
-                  setAppliedTime(timeEnabled ? time : null);
-                  setAppliedGoal(goalEnabled ? goal : null);
-                  setFiltersApplied(timeEnabled || goalEnabled);
-                }}
-                className="rounded-xl bg-white px-5 py-3 text-xs font-black text-black hover:bg-white/90"
-              >
-                {t("APPLICA FILTRI")}
-              </button>
             </div>
           </div>
-        </div>
-      </section>
 
-      </>
+          {loadingOffers && <div className="mt-5 rounded-2xl border border-white/10 bg-[#06132b] p-5 text-sm text-white/60">{t("Caricamento offerte ayeT…")}</div>}
+          {!loadingOffers && offerError && <div className="mt-5 rounded-2xl border border-orange-400/30 bg-[#06132b] p-5 text-sm text-orange-200">{t("Errore collegamento ayeT")}: {offerError}</div>}
+
+          {!loadingOffers && !offerError && activities.length > 0 && (() => {
+            const best = [...activities].filter(a => a.publish.ready && a.reward != null).sort((a,b)=>(b.reward??0)-(a.reward??0))[0] ?? activities.find(a => a.publish.ready) ?? activities[0];
+            const categories: {key:Filter; title:string; subtitle:string}[] = [
+              {key:"Giochi",title:language==="it"?"Giochi da installare":"Games to try",subtitle:language==="it"?"Campagne con più obiettivi":"Multi-step campaigns"},
+              {key:"Sondaggi",title:language==="it"?"Sondaggi":"Surveys",subtitle:language==="it"?"Opinioni e questionari":"Questionnaires and opinions"},
+              {key:"Shopping",title:language==="it"?"Shopping e offerte":"Shopping and offers",subtitle:language==="it"?"Promozioni e attività commerciali":"Retail and promotional offers"},
+              {key:"App",title:language==="it"?"App e nuove attività":"Apps and activities",subtitle:language==="it"?"Scopri altre opportunità":"Explore more opportunities"},
+              {key:"Video",title:language==="it"?"Video":"Video",subtitle:language==="it"?"Contenuti disponibili":"Available content"},
+              {key:"Micro-task",title:language==="it"?"Altre attività":"Other activities",subtitle:language==="it"?"Altre opportunità disponibili":"More available opportunities"},
+            ];
+            const readyCount=activities.filter(a=>a.publish.ready).length;
+            return <>
+              {best && <button onClick={()=>setSelectedActivity(best)} className="mt-5 block w-full overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[#07152d] text-left hover:border-fuchsia-400/50">
+                <div className="grid sm:grid-cols-[180px_1fr]">
+                  <div className="relative h-40 bg-gradient-to-br from-fuchsia-500/20 to-cyan-500/10 sm:h-full">{safeMediaUrl(best.media?.iconLarge||best.media?.icon) ? <img src={safeMediaUrl(best.media?.iconLarge||best.media?.icon)??undefined} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-5xl">✨</div>}</div>
+                  <div className="p-5 sm:p-6"><div className="text-xs font-black uppercase tracking-widest text-fuchsia-300">{language==="it"?"In evidenza":"Featured"}</div><h2 className="mt-2 text-xl font-black sm:text-2xl">{best.title}</h2><p className="mt-2 text-sm text-white/55 line-clamp-2">{best.subtitle||best.description}</p><div className="mt-3 text-xl font-black text-emerald-300">{best.rewardLabel}</div><div className="mt-4 inline-flex rounded-xl bg-fuchsia-500 px-4 py-2 text-xs font-black">{language==="it"?"Scopri l'offerta →":"Explore offer →"}</div></div>
+                </div>
+              </button>}
+              <div className="mt-5 rounded-2xl border border-white/10 bg-[#06132b] px-4 py-3 text-sm text-white/60">{language==="it"?readyCount+" opportunità disponibili":readyCount+" available opportunities"}</div>
+              {categories.map(section=>{
+                const items=activities.filter(a=>a.category===section.key).slice(0,8);
+                if(!items.length) return null;
+                return <section key={section.key} className="mt-7">
+                  <div className="mb-3 flex items-end justify-between gap-3"><div><h2 className="text-xl font-black">{section.title}</h2><p className="mt-1 text-xs text-white/45">{section.subtitle}</p></div><button onClick={()=>{setFilter(section.key);setActiveSection(section.key==="Giochi"?"Play":"Attività");window.scrollTo({top:0,behavior:"smooth"});}} className="shrink-0 text-sm font-bold text-fuchsia-300">{language==="it"?"Vedi altro →":"See more →"}</button></div>
+                  <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory">
+                    {items.map(item=><article key={item.id} className="w-[250px] shrink-0 snap-start overflow-hidden rounded-2xl border border-white/10 bg-[#07152d] sm:w-[290px]">
+                      <button type="button" onClick={()=>setSelectedActivity(item)} className="block w-full text-left">
+                        <div className="h-40 bg-gradient-to-br from-fuchsia-500/15 to-cyan-400/10">{safeMediaUrl(item.media?.iconLarge||item.media?.icon)?<img src={safeMediaUrl(item.media?.iconLarge||item.media?.icon)??undefined} alt={item.title} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover"/>:<div className="flex h-full items-center justify-center text-5xl">{item.category==="Giochi"?"🎮":item.category==="Sondaggi"?"📋":item.category==="Shopping"?"🛍️":"✨"}</div>}</div>
+                        <div className="p-3"><div className="text-[10px] font-black uppercase tracking-wider text-fuchsia-300">{item.category}</div><h3 className="mt-1 line-clamp-2 min-h-[42px] font-bold">{item.title}</h3><div className="mt-2 text-lg font-black text-emerald-300">{item.rewardLabel}</div><p className="mt-1 line-clamp-2 text-xs text-white/45">{item.subtitle||item.description}</p></div>
+                      </button>
+                      <div className="flex gap-2 px-3 pb-3"><button onClick={()=>setSelectedActivity(item)} className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold">{language==="it"?"Dettagli":"Details"}</button><button disabled={!item.publish.ready} onClick={()=>launchActivity(item)} className="flex-1 rounded-xl bg-fuchsia-500 px-3 py-2 text-xs font-black disabled:opacity-40">{language==="it"?"Inizia":"Start"}</button></div>
+                    </article>)}
+                  </div>
+                </section>;
+              })}
+              <div className="mt-8 rounded-3xl border border-cyan-400/15 bg-[#06132b] p-5"><h2 className="text-xl font-black">{language==="it"?"Scopri tutte le opportunità":"Explore all opportunities"}</h2><p className="mt-2 text-sm text-white/55">{language==="it"?"Apri il catalogo completo e filtra per categoria.":"Open the full catalog and filter by category."}</p><button onClick={()=>setActiveSection("Attività")} className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">{language==="it"?"Vai al catalogo →":"Open catalog →"}</button></div>
+            </>;
+          })()}
+          {!loadingOffers && !offerError && activities.length===0 && <div className="mt-5 rounded-2xl border border-white/10 bg-[#06132b] p-5 text-sm text-white/60">{t("Nessuna offerta disponibile in questo momento.")}</div>}
+        </section>
       )}
-
-      {(activeSection === "Home" || activeSection === "Attività" || activeSection === "Play") && (
+      {(activeSection === "Attività" || activeSection === "Play") && (
       <section className="mx-auto max-w-7xl px-4 pb-6">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {filters.map((item) => (
