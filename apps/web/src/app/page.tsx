@@ -288,6 +288,7 @@ export default function Home() {
   const [plannerDate, setPlannerDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [plannerOfferId, setPlannerOfferId] = useState("");
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
+  const [plannerFeedback, setPlannerFeedback] = useState<string | null>(null);
   const [plannerLoaded, setPlannerLoaded] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -403,15 +404,11 @@ export default function Home() {
   function addPlannedTask() {
     const activity = activities.find((item) => item.id === plannerOfferId);
     if (!activity || !plannerDate) return;
-    setPlannedTasks((current) => [
+    setPlannedTasks((current) => current.some((item) => item.activityId === activity.id && item.date === plannerDate) ? current : [
       ...current,
-      {
-        id: `${Date.now()}-${activity.id}`,
-        activityId: activity.id,
-        title: activity.title,
-        date: plannerDate,
-      },
+      { id: `${Date.now()}-${activity.id}`, activityId: activity.id, title: activity.title, date: plannerDate },
     ]);
+    setPlannerFeedback(activity.title);
   }
 
   async function loadWallet(userId: string) {
@@ -1163,6 +1160,7 @@ export default function Home() {
               <input type="date" value={plannerDate} onChange={(event) => setPlannerDate(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white" />
             </label>
             <button type="button" onClick={addPlannedTask} disabled={!plannerOfferId || !plannerDate} className="rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40">Aggiungi al planner</button>
+          {plannerFeedback && <div className="sm:col-span-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-sm text-emerald-200">✓ {plannerFeedback} {language === "it" ? "aggiunta al Planner. La pianificazione è salvata: puoi avviare l'offerta dalla scheda qui sotto nel giorno scelto." : "added to Planner. Start it from the card below on your selected day."}</div>}
           </div>
           <div className="mt-6">
             <h2 className="mb-3 text-xl font-black">Le tue attività pianificate</h2>
@@ -1176,7 +1174,7 @@ export default function Home() {
                       <div className="font-bold">{task.title}</div>
                       <div className="mt-1 text-xs text-cyan-200/70">{new Date(task.date + "T12:00:00").toLocaleDateString(language === "it" ? "it-IT" : "en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</div>
                     </div>
-                    <button type="button" onClick={() => setPlannedTasks((current) => current.filter((item) => item.id !== task.id))} className="rounded-xl border border-white/10 px-4 py-2 text-xs font-black text-white/65 hover:bg-white/[0.06]">Rimuovi</button>
+                    <div className="flex flex-wrap gap-2"><button type="button" onClick={() => { const activity = activities.find((a) => a.id === task.activityId); if (activity) launchActivity(activity); }} disabled={!activities.find((a) => a.id === task.activityId)?.publish.ready} className="rounded-xl bg-fuchsia-500 px-4 py-2 text-xs font-black disabled:opacity-40">{language === "it" ? "Avvia offerta" : "Start offer"} →</button><button type="button" onClick={() => setPlannedTasks((current) => current.filter((item) => item.id !== task.id))} className="rounded-xl border border-white/10 px-4 py-2 text-xs font-black text-white/65 hover:bg-white/[0.06]">{language === "it" ? "Rimuovi" : "Remove"}</button></div>
                   </article>
                 ))}
               </div>
