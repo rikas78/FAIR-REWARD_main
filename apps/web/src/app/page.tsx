@@ -28,6 +28,8 @@ type PlannedTask = {
   activityId: string;
   title: string;
   date: string;
+  time?: string;
+  duration?: number;
 };
 
 type StartedActivity = { id: string; activityId: string; offerId: string; title: string; startedAt: string; status: string };
@@ -289,6 +291,8 @@ export default function Home() {
   const [plannerOfferId, setPlannerOfferId] = useState("");
   const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([]);
   const [plannerFeedback, setPlannerFeedback] = useState<string | null>(null);
+  const [plannerTime, setPlannerTime] = useState("18:00");
+  const [plannerDuration, setPlannerDuration] = useState(30);
   const [plannerLoaded, setPlannerLoaded] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -406,7 +410,7 @@ export default function Home() {
     if (!activity || !plannerDate) return;
     setPlannedTasks((current) => current.some((item) => item.activityId === activity.id && item.date === plannerDate) ? current : [
       ...current,
-      { id: `${Date.now()}-${activity.id}`, activityId: activity.id, title: activity.title, date: plannerDate },
+      { id: `${Date.now()}-${activity.id}`, activityId: activity.id, title: activity.title, date: plannerDate, time: plannerTime, duration: plannerDuration },
     ]);
     setPlannerFeedback(activity.title);
   }
@@ -1159,6 +1163,8 @@ export default function Home() {
               Giorno
               <input type="date" value={plannerDate} onChange={(event) => setPlannerDate(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white" />
             </label>
+            <label className="block text-sm font-bold text-white/75">Orario<input type="time" value={plannerTime} onChange={(event) => setPlannerTime(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white"/></label>
+            <label className="block text-sm font-bold text-white/75">Tempo da dedicare<select value={plannerDuration} onChange={(event) => setPlannerDuration(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#020a1d] px-4 py-3 text-sm text-white">{[15,30,45,60,90,120].map((m)=><option key={m} value={m}>{m<60?m+" minuti":m/60+" "+(m===60?"ora":"ore")}</option>)}</select></label>
             <button type="button" onClick={addPlannedTask} disabled={!plannerOfferId || !plannerDate} className="rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40">Aggiungi al planner</button>
           {plannerFeedback && <div className="sm:col-span-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-sm text-emerald-200">✓ {plannerFeedback} {language === "it" ? "aggiunta al Planner. La pianificazione è salvata: puoi avviare l'offerta dalla scheda qui sotto nel giorno scelto." : "added to Planner. Start it from the card below on your selected day."}</div>}
           </div>
@@ -1172,7 +1178,7 @@ export default function Home() {
                   <article key={task.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#06132b] p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="font-bold">{task.title}</div>
-                      <div className="mt-1 text-xs text-cyan-200/70">{new Date(task.date + "T12:00:00").toLocaleDateString(language === "it" ? "it-IT" : "en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</div>
+                      <div className="mt-1 text-xs text-cyan-200/70">{new Date(task.date + "T12:00:00").toLocaleDateString(language === "it" ? "it-IT" : "en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })} · {task.time || "Orario non impostato"} · {task.duration || 30} min</div>
                     </div>
                     <div className="flex flex-wrap gap-2"><button type="button" onClick={() => { const activity = activities.find((a) => a.id === task.activityId); if (activity) launchActivity(activity); }} disabled={!activities.find((a) => a.id === task.activityId)?.publish.ready} className="rounded-xl bg-fuchsia-500 px-4 py-2 text-xs font-black disabled:opacity-40">{language === "it" ? "Avvia offerta" : "Start offer"} →</button><button type="button" onClick={() => setPlannedTasks((current) => current.filter((item) => item.id !== task.id))} className="rounded-xl border border-white/10 px-4 py-2 text-xs font-black text-white/65 hover:bg-white/[0.06]">{language === "it" ? "Rimuovi" : "Remove"}</button></div>
                   </article>
